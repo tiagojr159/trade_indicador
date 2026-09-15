@@ -25,7 +25,10 @@ if (!flock($lockHandle, LOCK_EX)) {
     throw new RuntimeException('Nao foi possivel bloquear a coleta.');
 }
 
-$saveIntervalMinutes = indicadorSaveIntervalMinutes();
+$requestedSaveInterval = isset($_GET['save_interval_minutes']) ? (int)$_GET['save_interval_minutes'] : 0;
+$saveIntervalMinutes = in_array($requestedSaveInterval, INDICADOR_ALLOWED_SAVE_INTERVALS, true)
+    ? $requestedSaveInterval
+    : indicadorSaveIntervalMinutes();
 $saveIntervalSeconds = $saveIntervalMinutes * 60;
 $lastStmt = $pdo->query('SELECT id, created_at FROM indicador_historico ORDER BY created_at DESC LIMIT 1');
 $lastRow = $lastStmt->fetch();

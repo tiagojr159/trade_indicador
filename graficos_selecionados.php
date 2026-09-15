@@ -2,9 +2,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/indicador_settings.php';
 
 $error = null;
 $rows = [];
+$settings = indicadorSettings();
 $focusedIndicators = [
     ['key' => 'indicator_14', 'label' => 'Stochastic %K/%D', 'color' => '#c084fc', 'checked' => true],
     ['key' => 'indicator_15', 'label' => 'Stoch RSI', 'color' => '#38bdf8', 'checked' => true],
@@ -43,6 +45,8 @@ $chartRows = array_map(static function (array $row): array {
     }
     return $item;
 }, $rows);
+$lastSavedTimestamp = $rows ? strtotime((string)end($rows)['created_at']) : false;
+$nextSaveTimestamp = $lastSavedTimestamp === false ? time() : $lastSavedTimestamp + 60;
 ?>
 <!doctype html>
 <html lang="pt-BR">
@@ -59,6 +63,7 @@ $chartRows = array_map(static function (array $row): array {
 <div class="wrap">
 <header class="topbar"><div class="brand"><div class="coin">B</div><div><h1>Gráficos Selecionados</h1><small><span class="dot"></span>BTC, ETH, mediana e sinais principais</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip active" href="graficos_selecionados.php">Gráficos selecionados</a></nav></header>
 <?php if ($error): ?><div class="errors"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+<section class="card metric" style="margin-bottom:18px"><span>Atualização automática a cada 1 minuto</span><b id="countdown">--:--</b></section>
 <section class="summary">
   <div class="card metric"><span>Tendência</span><b id="trendText" class="neutral">Aguardando</b></div>
   <div class="card metric"><span>Probabilidade de alta</span><b id="upProb">--%</b></div>
@@ -81,6 +86,9 @@ $chartRows = array_map(static function (array $row): array {
 <script>
 const rows = <?= json_encode($chartRows, JSON_UNESCAPED_UNICODE) ?>;
 const focusedIndicators = <?= json_encode($focusedIndicators, JSON_UNESCAPED_UNICODE) ?>;
+let nextSaveAt = <?= (int)$nextSaveTimestamp ?> * 1000;
+let isCollecting = false;
+const countdown = document.getElementById('countdown');
 const series = [
   {key:'btc_price', label:'Bitcoin', color:'#f7b928', normalize:true, checked:true},
   {key:'eth_price', label:'Ethereum', color:'#5ca8ff', normalize:true, checked:true},
@@ -91,6 +99,40 @@ const checks = document.getElementById('checks');
 const legend = document.getElementById('legend');
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
+
+function formatRemaining(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+}
+
+async function collectWhenDue() {
+  if (isCollecting) return;
+  isCollecting = true;
+  countdown.textContent = 'salvando...';
+  try {
+    const response = await fetch('coletar_indicadores.php?auto=1&save_interval_minutes=1', {cache: 'no-store'});
+    const data = await response.json();
+    if (data.saved) {
+      window.location.reload();
+      return;
+    }
+    nextSaveAt = data.next_save_at ? Date.parse(data.next_save_at) : Date.now() + 60000;
+  } catch (error) {
+    nextSaveAt = Date.now() + 60000;
+  } finally {
+    isCollecting = false;
+  }
+}
+
+function tickAutoUpdate() {
+  const remaining = nextSaveAt - Date.now();
+  countdown.textContent = formatRemaining(remaining);
+  if (remaining <= 0) {
+    collectWhenDue();
+  }
+}
 
 function indicatorSeries() { return series.filter(s => !s.normalize && !s.median); }
 function activeIndicatorKeys() { return indicatorSeries().filter(s => document.querySelector(`[data-key="${s.key}"]`)?.checked).map(s => s.key); }
@@ -220,6 +262,8 @@ document.getElementById('all').addEventListener('click', () => { checks.querySel
 document.getElementById('none').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = false); draw(); });
 document.getElementById('core').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = ['btc_price','eth_price','median'].includes(i.dataset.key)); draw(); });
 window.addEventListener('resize', draw);
+setInterval(tickAutoUpdate, 1000);
+tickAutoUpdate();
 draw();
 </script>
 </body>
