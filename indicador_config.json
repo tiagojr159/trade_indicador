@@ -1,0 +1,5 @@
+{
+  "save_interval_minutes": 1,
+  "allowed_save_interval_minutes": [1, 5, 15, 30, 60],
+  "updated_at": null
+}

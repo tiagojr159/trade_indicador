@@ -2,11 +2,53 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/indicador_settings.php';
 
 if (PHP_SAPI === 'cli' && isset($argv[1])) {
     $_GET['interval'] = $argv[1];
 }
 $_GET['interval'] = $_GET['interval'] ?? '1h';
+
+$pdo = appPdo();
+$schema = file_get_contents(__DIR__ . '/criar_tabela_indicadores.sql');
+if ($schema === false) {
+    throw new RuntimeException('Arquivo criar_tabela_indicadores.sql nao encontrado.');
+}
+$pdo->exec($schema);
+
+$lockHandle = fopen(__DIR__ . '/indicador_coleta.lock', 'c');
+if ($lockHandle === false) {
+    throw new RuntimeException('Nao foi possivel criar a trava da coleta.');
+}
+if (!flock($lockHandle, LOCK_EX)) {
+    fclose($lockHandle);
+    throw new RuntimeException('Nao foi possivel bloquear a coleta.');
+}
+
+$saveIntervalMinutes = indicadorSaveIntervalMinutes();
+$saveIntervalSeconds = $saveIntervalMinutes * 60;
+$lastStmt = $pdo->query('SELECT id, created_at FROM indicador_historico ORDER BY created_at DESC LIMIT 1');
+$lastRow = $lastStmt->fetch();
+$lastSavedAt = $lastRow ? strtotime((string)$lastRow['created_at']) : false;
+$nextSaveAt = $lastSavedAt === false ? 0 : $lastSavedAt + $saveIntervalSeconds;
+
+if ($lastSavedAt !== false && time() < $nextSaveAt) {
+    $remainingSeconds = max(0, $nextSaveAt - time());
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => true,
+        'saved' => false,
+        'reason' => 'interval_lock',
+        'message' => 'Registro ignorado: ainda nao passou o intervalo configurado.',
+        'save_interval_minutes' => $saveIntervalMinutes,
+        'last_saved_at' => date('c', $lastSavedAt),
+        'next_save_at' => date('c', $nextSaveAt),
+        'remaining_seconds' => $remainingSeconds,
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    flock($lockHandle, LOCK_UN);
+    fclose($lockHandle);
+    exit;
+}
 
 ob_start();
 require __DIR__ . '/indicadores.php';
@@ -16,13 +58,6 @@ if (!isset($inds) || !is_array($inds)) {
     http_response_code(500);
     exit("Nao foi possivel calcular os indicadores.\n");
 }
-
-$pdo = appPdo();
-$schema = file_get_contents(__DIR__ . '/criar_tabela_indicadores.sql');
-if ($schema === false) {
-    throw new RuntimeException('Arquivo criar_tabela_indicadores.sql nao encontrado.');
-}
-$pdo->exec($schema);
 
 $ethTicker = httpJson('https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT');
 $ethPrice = isset($ethTicker['lastPrice']) ? (float)$ethTicker['lastPrice'] : null;
@@ -49,12 +84,18 @@ $params[':indicator_names'] = json_encode(array_map(static fn(array $it): string
 $sql = 'INSERT INTO indicador_historico (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
+$insertedId = (int)$pdo->lastInsertId();
+
+flock($lockHandle, LOCK_UN);
+fclose($lockHandle);
 
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode([
     'ok' => true,
-    'id' => (int)$pdo->lastInsertId(),
+    'saved' => true,
+    'id' => $insertedId,
     'interval' => $interval ?? '1h',
+    'save_interval_minutes' => $saveIntervalMinutes,
     'btc_price' => $currentPrice ?? null,
     'eth_price' => $ethPrice,
     'indicators' => min(50, count($inds)),
