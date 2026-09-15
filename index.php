@@ -52,6 +52,7 @@ body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple
     <a class="tab active" href="index.php">Capa</a>
     <a class="tab" href="indicadores.php">Indicadores</a>
     <a class="tab" href="historico_indicadores.php">Histórico com gráfico</a>
+    <a class="tab" href="graficos_selecionados.php">Gráficos selecionados</a>
   </nav>
 </header>
 <main class="cover">
@@ -61,6 +62,7 @@ body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple
     <div class="actions">
       <a class="button primary" href="indicadores.php">Abrir indicadores</a>
       <a class="button" href="historico_indicadores.php">Ver histórico</a>
+      <a class="button" href="graficos_selecionados.php">Ver gráficos selecionados</a>
     </div>
   </section>
   <aside class="panel">
