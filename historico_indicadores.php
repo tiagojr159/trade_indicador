@@ -58,7 +58,7 @@ $chartRows = array_map(static function (array $row): array {
 </head>
 <body>
 <div class="wrap">
-<header class="topbar"><div class="brand"><div class="coin">₿</div><div><h1>Histórico dos Indicadores</h1><small><span class="dot"></span>BTC, ETH e 50 scores gravados no banco</small></div></div><nav class="controls"><a class="chip" href="index.php">Painel atual</a><a class="chip active" href="historico_indicadores.php">Histórico</a><a class="chip" href="coletar_indicadores.php">Coletar agora</a></nav></header>
+<header class="topbar"><div class="brand"><div class="coin">₿</div><div><h1>Histórico dos Indicadores</h1><small><span class="dot"></span>BTC, ETH e 50 scores gravados no banco</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip active" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip" href="coletar_indicadores.php">Coletar agora</a></nav></header>
 <?php if ($error): ?><div class="errors"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 <section class="layout">
 <aside class="card panel"><div class="muted">Escolha as linhas do gráfico</div><div class="actions"><button class="btn" type="button" id="all">Todos</button><button class="btn" type="button" id="none">Limpar</button><button class="btn" type="button" id="base">BTC + ETH</button></div><div class="checklist" id="checks"></div></aside>

@@ -9,7 +9,7 @@ if (PHP_SAPI === 'cli' && isset($argv[1])) {
 $_GET['interval'] = $_GET['interval'] ?? '1h';
 
 ob_start();
-require __DIR__ . '/index.php';
+require __DIR__ . '/indicadores.php';
 ob_end_clean();
 
 if (!isset($inds) || !is_array($inds)) {
