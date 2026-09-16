@@ -10,7 +10,9 @@ if (!in_array($threshold, [.05, .1, .2], true)) {
     $threshold = .1;
 }
 $data = spData($minutes, $threshold);
-header('Cache-Control: no-store');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -47,7 +49,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     <div id="error" role="alert" hidden></div>
     <section class="signal-section" aria-labelledby="signalTitle">
       <div class="signal-copy"><span class="eyebrow" id="status">ANALISANDO</span><h2 id="signalTitle">Aguardando dados</h2><p id="signalDetail"></p><div class="meta" id="reference"></div></div>
-      <div class="distribution"><div class="section-label">Resultados em cen&#225;rios semelhantes <button type="button" class="help" data-tip="Frequ&#234;ncias observadas em at&#233; 25 cen&#225;rios passados semelhantes. N&#227;o s&#227;o probabilidades calibradas de um movimento futuro." aria-label="Sobre as frequ&#234;ncias">?</button></div><div id="frequencies" class="frequencies"></div><div class="stack" id="stack" aria-hidden="true"></div><small id="neighborsSummary"></small></div>
+      <div class="distribution"><div class="section-label">Resultados em cen&#225;rios semelhantes <button type="button" class="help" data-tip="Frequ&#234;ncias ponderadas por similaridade em at&#233; 13 cen&#225;rios passados semelhantes. N&#227;o s&#227;o probabilidades calibradas de um movimento futuro." aria-label="Sobre as frequ&#234;ncias">?</button></div><div id="frequencies" class="frequencies"></div><div class="stack" id="stack" aria-hidden="true"></div><small id="neighborsSummary"></small></div>
     </section>
     <section class="metrics" aria-label="Valida&#231;&#227;o">
       <div><span>Acerto fora da amostra <button type="button" class="help" data-tip="Em cada teste, apenas resultados anteriores ao instante da previs&#227;o podem ser usados. Os per&#237;odos avaliados n&#227;o se sobrep&#245;em. Acertos incluem alta, baixa e lateral." aria-label="Sobre o acerto">?</button></span><b id="accuracy">--</b><small id="testCount"></small></div>

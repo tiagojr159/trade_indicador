@@ -196,6 +196,16 @@
   document.addEventListener('scroll', () => { $('helpTooltip').hidden = true; }, true);
 
   let remaining = 60, busy = false;
+  async function collectLatest(signal) {
+    const collect = new URLSearchParams({
+      interval: '1h',
+      save_interval_minutes: '1',
+      _: String(Date.now())
+    });
+    const response = await fetch(`coletar_indicadores.php?${collect}`, {cache: 'no-store', signal});
+    if (!response.ok) throw new Error('coleta');
+    return response.json();
+  }
   async function refresh() {
     if (busy) return;
     busy = true; $('refreshStatus').textContent = 'Atualizando...';
@@ -204,9 +214,14 @@
     const params = new URLSearchParams({horizonte: $('filters').querySelector('[name=horizonte]:checked').value, limiar: $('filters').querySelector('[name=limiar]').value});
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 20000);
     try {
+      $('refreshStatus').textContent = 'Coletando...';
+      await collectLatest(controller.signal).catch(() => null);
+      params.set('_', String(Date.now()));
+      $('refreshStatus').textContent = 'Atualizando...';
       const response = await fetch(`super_previsao.php?${params}&format=json`, {cache: 'no-store', signal: controller.signal});
       if (!response.ok) throw new Error('HTTP');
       data = await response.json(); render(); $('error').hidden = true;
+      params.delete('_');
       history.replaceState(null, '', `super_previsao.php?${params}`);
     } catch {
       $('error').textContent = 'Nao foi possivel atualizar. A leitura exibida e da ultima consulta concluida; tente novamente.'; $('error').hidden = false;
@@ -225,4 +240,5 @@
     if (remaining <= 0) refresh();
   }, 1000);
   render();
+  setTimeout(refresh, 1200);
 })();

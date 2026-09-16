@@ -113,7 +113,7 @@ function spPredict(array $samples, array $query): ?array
         if (!$overlap) {
             $neighbors[] = $sample;
         }
-        if (count($neighbors) >= 25) {
+        if (count($neighbors) >= 13) {
             break;
         }
     }
@@ -121,15 +121,27 @@ function spPredict(array $samples, array $query): ?array
         return null;
     }
     $counts = [0, 0, 0];
+    $weights = [0.0, 0.0, 0.0];
+    $totalWeight = 0.0;
     foreach ($neighbors as $s) {
         $counts[$s['label']]++;
+        $weight = 1 / (($s['distance'] + .02) ** 1.5);
+        $weights[$s['label']] += $weight;
+        $totalWeight += $weight;
     }
-    // These are observed frequencies, not calibrated future probabilities.
-    $probabilities = array_map(static function (int $v) use ($neighbors): float {
-        return $v / count($neighbors);
-    }, $counts);
-    $winner = array_keys($counts, max($counts));
-    $label = count($winner) === 1 ? $winner[0] : 1;
+    // Weighted frequencies from observed neighbors, not calibrated future probabilities.
+    $probabilities = array_map(static function (float $v) use ($totalWeight): float {
+        return $totalWeight > 0 ? $v / $totalWeight : 0.0;
+    }, $weights);
+    $margin = .03;
+    $label = 1;
+    if ($probabilities[2] - max($probabilities[1], $probabilities[0]) >= $margin) {
+        $label = 2;
+    } elseif ($probabilities[0] - max($probabilities[1], $probabilities[2]) >= $margin) {
+        $label = 0;
+    } elseif (abs($probabilities[2] - $probabilities[0]) >= $margin) {
+        $label = $probabilities[2] > $probabilities[0] ? 2 : 0;
+    }
     $returns = array_column($neighbors, 'return');
     sort($returns);
     return ['label' => $label, 'frequencies' => $probabilities, 'count' => count($neighbors),
