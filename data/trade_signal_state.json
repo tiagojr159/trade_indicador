@@ -1,0 +1,20 @@
+{
+    "updated_at": "2026-09-16T20:13:20-03:00",
+    "updated_ts": 1789600400,
+    "source": "trade_simulado_snapshot",
+    "run_id": "live_20260916",
+    "minutes": 5,
+    "threshold": 0.1,
+    "label": 1,
+    "signal": "lateral",
+    "is_directional": false,
+    "btc_price": 75721.2,
+    "signal_time": "2026-09-16T20:04:47-03:00",
+    "signal_ts": 1789599887,
+    "probability_down": 0.2809887253626384,
+    "probability_flat": 0.7190112746373615,
+    "probability_up": 0,
+    "neighbors_count": 9,
+    "similarity": 0.8075525065153256,
+    "notes": null
+}

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/previsao_dados.php';
+require_once __DIR__ . '/trade_signal_state.php';
 $minutes = filter_input(INPUT_GET, 'horizonte', FILTER_VALIDATE_INT) ?: 15;
 if (!in_array($minutes, [5, 15, 30, 60], true)) {
     $minutes = 15;
@@ -10,6 +11,11 @@ if (!in_array($threshold, [.05, .1, .2], true)) {
     $threshold = .1;
 }
 $data = spData($minutes, $threshold);
+tradeSignalSave($data['prediction'] ?? null, $data['latest'] ?? null, [
+    'source' => 'super_previsao',
+    'minutes' => $minutes,
+    'threshold' => $threshold,
+]);
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
