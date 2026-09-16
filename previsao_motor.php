@@ -68,8 +68,39 @@ function spSamples(array $rows, int $minutes, float $threshold): array
     return $samples;
 }
 
-function spPredict(array $samples, array $query): ?array
+function spPredictionConfig(int $minutes, float $threshold): array
 {
+    $default = ['k' => 13, 'power' => 1.5, 'margin' => .03, 'halfLife' => 0, 'requireWinner' => false];
+    if ($minutes === 5 && abs($threshold - .1) < .00001) {
+        return ['k' => 9, 'power' => 1.25, 'margin' => .03, 'halfLife' => 4, 'requireWinner' => true];
+    }
+    if ($minutes === 5 && abs($threshold - .2) < .00001) {
+        return ['k' => 15, 'power' => 1.0, 'margin' => .03, 'halfLife' => 4, 'requireWinner' => true];
+    }
+    if ($minutes === 5 && abs($threshold - .05) < .00001) {
+        return ['k' => 7, 'power' => 2.0, 'margin' => .03, 'halfLife' => 8, 'requireWinner' => false];
+    }
+    if ($minutes === 30 && abs($threshold - .1) < .00001) {
+        return ['k' => 7, 'power' => .75, 'margin' => .02, 'halfLife' => 0, 'requireWinner' => false];
+    }
+    if ($minutes === 15 && abs($threshold - .2) < .00001) {
+        return ['k' => 7, 'power' => .75, 'margin' => .08, 'halfLife' => 0, 'requireWinner' => true];
+    }
+    if ($minutes === 30 && abs($threshold - .2) < .00001) {
+        return ['k' => 13, 'power' => 3.0, 'margin' => .15, 'halfLife' => 24, 'requireWinner' => false];
+    }
+    if ($minutes === 60 && abs($threshold - .1) < .00001) {
+        return ['k' => 7, 'power' => 1.75, 'margin' => 0, 'halfLife' => 0, 'requireWinner' => false];
+    }
+    if ($minutes === 60 && abs($threshold - .2) < .00001) {
+        return ['k' => 7, 'power' => 1.75, 'margin' => 0, 'halfLife' => 0, 'requireWinner' => false];
+    }
+    return $default;
+}
+
+function spPredict(array $samples, array $query, ?array $config = null): ?array
+{
+    $config = $config ?: ['k' => 13, 'power' => 1.5, 'margin' => .03, 'halfLife' => 0, 'requireWinner' => false];
     if (count(array_filter($query['x'], 'is_numeric')) < 40) {
         return null;
     }
@@ -113,7 +144,7 @@ function spPredict(array $samples, array $query): ?array
         if (!$overlap) {
             $neighbors[] = $sample;
         }
-        if (count($neighbors) >= 13) {
+        if (count($neighbors) >= $config['k']) {
             break;
         }
     }
@@ -125,7 +156,11 @@ function spPredict(array $samples, array $query): ?array
     $totalWeight = 0.0;
     foreach ($neighbors as $s) {
         $counts[$s['label']]++;
-        $weight = 1 / (($s['distance'] + .02) ** 1.5);
+        $weight = 1 / (($s['distance'] + .02) ** $config['power']);
+        if ($config['halfLife'] > 0) {
+            $ageHours = max(0.0, ($query['time'] - $s['end']) / 3600);
+            $weight *= 0.5 ** ($ageHours / $config['halfLife']);
+        }
         $weights[$s['label']] += $weight;
         $totalWeight += $weight;
     }
@@ -133,13 +168,13 @@ function spPredict(array $samples, array $query): ?array
     $probabilities = array_map(static function (float $v) use ($totalWeight): float {
         return $totalWeight > 0 ? $v / $totalWeight : 0.0;
     }, $weights);
-    $margin = .03;
+    $margin = $config['margin'];
     $label = 1;
     if ($probabilities[2] - max($probabilities[1], $probabilities[0]) >= $margin) {
         $label = 2;
     } elseif ($probabilities[0] - max($probabilities[1], $probabilities[2]) >= $margin) {
         $label = 0;
-    } elseif (abs($probabilities[2] - $probabilities[0]) >= $margin) {
+    } elseif (!$config['requireWinner'] && abs($probabilities[2] - $probabilities[0]) >= $margin) {
         $label = $probabilities[2] > $probabilities[0] ? 2 : 0;
     }
     $returns = array_column($neighbors, 'return');
@@ -164,6 +199,7 @@ function spAnalyze(array $prepared, int $minutes, float $threshold): array
         return $r['interval'] === $latest['interval'] && $r['names'] === $latest['names'];
     }));
     $samples = spSamples($rows, $minutes, $threshold);
+    $predictionConfig = spPredictionConfig($minutes, $threshold);
     $tests = [];
     $nextTest = 0;
     $testFrom = $latest['time'] - 120 * ($minutes * 60 + 120);
@@ -171,7 +207,7 @@ function spAnalyze(array $prepared, int $minutes, float $threshold): array
         if ($sample['time'] < $nextTest || $sample['time'] < $testFrom) {
             continue;
         }
-        $prediction = spPredict($samples, $sample);
+        $prediction = spPredict($samples, $sample, $predictionConfig);
         if ($prediction === null) {
             continue;
         }
@@ -202,6 +238,6 @@ function spAnalyze(array $prepared, int $minutes, float $threshold): array
             'high' => min(1, $center + $radius), 'directional' => $directional,
             'directionAccuracy' => $directional ? $directionCorrect / $directional : null];
     }
-    return ['rows' => $rows, 'prediction' => spPredict($samples, $latest),
+    return ['rows' => $rows, 'prediction' => spPredict($samples, $latest, $predictionConfig),
         'tests' => $tests, 'metrics' => $metrics, 'samples' => count($samples)];
 }
