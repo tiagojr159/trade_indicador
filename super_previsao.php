@@ -32,7 +32,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 <div class="wrap">
   <header class="topbar">
     <div class="brand"><a class="coin" href="index.php" aria-label="Sistema Bitcoin">B</a><div><h1>Super Previs&#227;o</h1><small>Bitcoin / USDT</small></div></div>
-    <nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Hist&#243;rico com gr&#225;fico</a><a href="graficos_selecionados.php">Gr&#225;ficos selecionados</a><a href="super_previsao.php" aria-current="page">Super Previs&#227;o</a></nav>
+    <nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Hist&#243;rico com gr&#225;fico</a><a href="graficos_selecionados.php">Gr&#225;ficos selecionados</a><a href="super_previsao.php" aria-current="page">Super Previs&#227;o</a><a href="trade_simulado.php">Trade simulado</a></nav>
   </header>
   <main>
     <form id="filters" class="toolbar" method="get">

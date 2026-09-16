@@ -77,7 +77,7 @@ $selectedChartSeries = $chartSelection['selected_series'] ?? [];
 </head>
 <body>
 <div class="wrap">
-<header class="topbar"><div class="brand"><div class="coin">₿</div><div><h1>Histórico dos Indicadores</h1><small><span class="dot"></span>BTC, ETH e 50 scores gravados no banco</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip active" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip" href="graficos_selecionados.php">Gráficos selecionados</a><a class="chip" href="super_previsao.php">Super Previsão</a><a class="chip" href="coletar_indicadores.php">Coletar agora</a></nav></header>
+<header class="topbar"><div class="brand"><div class="coin">₿</div><div><h1>Histórico dos Indicadores</h1><small><span class="dot"></span>BTC, ETH e 50 scores gravados no banco</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip active" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip" href="graficos_selecionados.php">Gráficos selecionados</a><a class="chip" href="super_previsao.php">Super Previsão</a><a class="chip" href="trade_simulado.php">Trade simulado</a><a class="chip" href="coletar_indicadores.php">Coletar agora</a></nav></header>
 <form class="card settings" method="post">
   <label>Salvar novo registro a cada
     <select name="save_interval_minutes" onchange="this.form.submit()">

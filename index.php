@@ -54,6 +54,7 @@ body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple
     <a class="tab" href="historico_indicadores.php">Histórico com gráfico</a>
     <a class="tab" href="graficos_selecionados.php">Gráficos selecionados</a>
     <a class="tab" href="super_previsao.php">Super Previsão</a>
+    <a class="tab" href="trade_simulado.php">Trade simulado</a>
   </nav>
 </header>
 <main class="cover">
