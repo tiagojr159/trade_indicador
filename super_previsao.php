@@ -27,6 +27,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
   <title>Super Previs&#227;o | Sistema Bitcoin</title>
   <link rel="stylesheet" href="super_previsao.css?v=<?= filemtime(__DIR__ . '/super_previsao.css') ?>">
   <script src="super_previsao.js?v=<?= filemtime(__DIR__ . '/super_previsao.js') ?>" defer></script>
+  <script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
 </head>
 <body>
 <div class="wrap">

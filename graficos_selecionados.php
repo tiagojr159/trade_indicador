@@ -312,5 +312,6 @@ setInterval(tickAutoUpdate, 1000);
 tickAutoUpdate();
 draw();
 </script>
+<script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
 </body>
 </html>

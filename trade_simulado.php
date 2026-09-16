@@ -305,5 +305,11 @@ $equityPnl = $snapshot['equity'] - LIVE_INITIAL_BALANCE;
   }, 1000);
 })();
 </script>
+<script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
+<script>
+window.addEventListener('cron-trade:done', () => {
+  if (!location.search.includes('run=1')) location.reload();
+});
+</script>
 </body>
 </html>

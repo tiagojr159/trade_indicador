@@ -327,5 +327,6 @@ document.getElementById('base').addEventListener('click', () => { checks.querySe
 window.addEventListener('resize', draw);
 draw();
 </script>
+<script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
 </body>
 </html>

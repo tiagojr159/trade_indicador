@@ -78,5 +78,6 @@ body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple
 </main>
 <footer class="footer">Os dados em tempo real só são buscados quando a aba Indicadores é aberta.</footer>
 </div>
+<script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
 </body>
 </html>
