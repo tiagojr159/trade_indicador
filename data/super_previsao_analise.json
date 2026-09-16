@@ -1,0 +1,124 @@
+{
+    "records": 447,
+    "first": "2026-09-15 14:37:04",
+    "last": "2026-09-16 01:09:21",
+    "hours": 10.54,
+    "intervals": [
+        "1h"
+    ],
+    "variable_indicators": 36,
+    "results": {
+        "5": {
+            "samples": 431,
+            "validation": {
+                "count": 81,
+                "correct": 53,
+                "accuracy": 0.654320987654321,
+                "baseline": 0.654320987654321,
+                "low": 0.5458917196718802,
+                "high": 0.7487750475743764,
+                "directional": 0,
+                "directionAccuracy": null
+            },
+            "latest": {
+                "label": 1,
+                "frequencies": [
+                    0.24,
+                    0.64,
+                    0.12
+                ],
+                "count": 25,
+                "training": 430,
+                "baseline": 1,
+                "average": -0.02634317543046727,
+                "p10": -0.15457791163621115,
+                "p90": 0.10931187627523098,
+                "similarity": 0.8160373782070653
+            }
+        },
+        "15": {
+            "samples": 427,
+            "validation": {
+                "count": 27,
+                "correct": 9,
+                "accuracy": 0.3333333333333333,
+                "baseline": 0.18518518518518517,
+                "low": 0.1864305444359335,
+                "high": 0.5217558012789452,
+                "directional": 14,
+                "directionAccuracy": 0.35714285714285715
+            },
+            "latest": {
+                "label": 1,
+                "frequencies": [
+                    0.4,
+                    0.4,
+                    0.2
+                ],
+                "count": 25,
+                "training": 426,
+                "baseline": 2,
+                "average": -0.055639857539687476,
+                "p10": -0.30495192940867,
+                "p90": 0.1592820470685874,
+                "similarity": 0.7788514179018208
+            }
+        },
+        "30": {
+            "samples": 412,
+            "validation": {
+                "count": 13,
+                "correct": 3,
+                "accuracy": 0.23076923076923078,
+                "baseline": 0.38461538461538464,
+                "low": 0.08179379092465713,
+                "high": 0.5025687399512693,
+                "directional": 11,
+                "directionAccuracy": 0.2727272727272727
+            },
+            "latest": {
+                "label": 0,
+                "frequencies": [
+                    0.5333333333333333,
+                    0.13333333333333333,
+                    0.3333333333333333
+                ],
+                "count": 15,
+                "training": 411,
+                "baseline": 0,
+                "average": -0.1696075093085514,
+                "p10": -0.5306468337033965,
+                "p90": 0.1753368328485161,
+                "similarity": 0.7742093209166611
+            }
+        },
+        "60": {
+            "samples": 382,
+            "validation": {
+                "count": 5,
+                "correct": 2,
+                "accuracy": 0.4,
+                "baseline": 0.6,
+                "low": 0.1176182311592533,
+                "high": 0.769280067791163,
+                "directional": 4,
+                "directionAccuracy": 0.5
+            },
+            "latest": {
+                "label": 0,
+                "frequencies": [
+                    0.4444444444444444,
+                    0.2222222222222222,
+                    0.3333333333333333
+                ],
+                "count": 9,
+                "training": 381,
+                "baseline": 0,
+                "average": -0.21981295302202497,
+                "p10": -2.0522626786179887,
+                "p90": 0.44433744965886035,
+                "similarity": 0.7669438507480432
+            }
+        }
+    }
+}

@@ -61,7 +61,7 @@ $nextSaveTimestamp = $lastSavedTimestamp === false ? time() : $lastSavedTimestam
 </head>
 <body>
 <div class="wrap">
-<header class="topbar"><div class="brand"><div class="coin">B</div><div><h1>Gráficos Selecionados</h1><small><span class="dot"></span>BTC, ETH, média e sinais principais</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip active" href="graficos_selecionados.php">Gráficos selecionados</a></nav></header>
+<header class="topbar"><div class="brand"><div class="coin">B</div><div><h1>Gráficos Selecionados</h1><small><span class="dot"></span>BTC, ETH, média e sinais principais</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip active" href="graficos_selecionados.php">Gráficos selecionados</a><a class="chip" href="super_previsao.php">Super Previsão</a></nav></header>
 <?php if ($error): ?><div class="errors"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 <section class="card metric" style="margin-bottom:18px"><span>Atualização automática a cada 1 minuto</span><b id="countdown">--:--</b></section>
 <section class="summary">
