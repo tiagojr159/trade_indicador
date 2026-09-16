@@ -14,6 +14,7 @@ header('Content-Type: application/json; charset=utf-8');
 const CRON_TRADE_INITIAL_BALANCE = 100.0;
 const CRON_TRADE_HORIZON = 5;
 const CRON_TRADE_THRESHOLD = 0.1;
+const CRON_TRADE_LATERAL_SCALP_PCT = 0.05;
 
 function cronEnsureTradeSchema(PDO $pdo): void
 {
@@ -119,6 +120,16 @@ function cronUnrealized(array $state, float $price): float
     return 0.0;
 }
 
+function cronTradeLabel(array $prediction): int
+{
+    $label = (int)($prediction['label'] ?? 1);
+    if ($label !== 1) {
+        return $label;
+    }
+    $frequencies = $prediction['frequencies'] ?? [0, 0, 0];
+    return ((float)($frequencies[2] ?? 0)) >= ((float)($frequencies[0] ?? 0)) ? 2 : 0;
+}
+
 function cronInsertTrade(PDO $pdo, string $runId, array $event): void
 {
     $stmt = $pdo->prepare('INSERT INTO trade_simulado (run_id, is_live, event_type, strategy_minutes, threshold_pct,
@@ -152,35 +163,17 @@ function cronTrade(PDO $pdo): array
     }
     $price = (float)$latest['btc'];
     $time = date('Y-m-d H:i:s', (int)$latest['time']);
-    $tradeLabel = (int)$prediction['label'];
+    $tradeLabel = cronTradeLabel($prediction);
     tradeSignalSave($prediction, $latest, [
         'source' => 'cron_trade',
         'run_id' => $runId,
         'minutes' => CRON_TRADE_HORIZON,
         'threshold' => CRON_TRADE_THRESHOLD,
+        'trade_label' => $tradeLabel,
+        'lateral_scalp_pct' => CRON_TRADE_LATERAL_SCALP_PCT,
+        'notes' => (int)$prediction['label'] === 1 ? 'Lateral operado como scalp simulado de 0,05%.' : null,
     ]);
     $state = cronTradeState($pdo, $runId);
-    if ($tradeLabel === 1) {
-        if ($state['side'] === 'FLAT') {
-            return ['ok' => true, 'executed' => false, 'reason' => 'lateral_no_position', 'position' => 'FLAT'];
-        }
-        $pnl = cronUnrealized($state, $price);
-        $cash = max(0.0, $state['cash'] + $pnl);
-        $btcReturn = ($price / (float)$state['entry'] - 1) * 100;
-        $tradeReturn = $state['side'] === 'LONG' ? $btcReturn : -$btcReturn;
-        cronInsertTrade($pdo, $runId, [
-            ':event_type' => 'CLOSE_' . $state['side'], ':balance_before' => $state['cash'], ':balance_after' => $cash,
-            ':entry_time' => $time, ':exit_time' => $time, ':side' => $state['side'], ':entry_price' => $state['entry'],
-            ':exit_price' => $price, ':btc_return_pct' => $btcReturn, ':trade_return_pct' => $tradeReturn,
-            ':pnl_usd' => $pnl, ':predicted_label' => $tradeLabel, ':was_correct' => $pnl > 0 ? 1 : 0,
-            ':neighbors_count' => (int)$prediction['count'], ':similarity' => (float)$prediction['similarity'],
-            ':probability_up' => (float)$prediction['frequencies'][2], ':probability_flat' => (float)$prediction['frequencies'][1],
-            ':probability_down' => (float)$prediction['frequencies'][0], ':notes' => 'Fechamento pelo cron: previsao atual lateral.',
-            ':position_side' => 'FLAT', ':position_qty' => 0, ':position_entry_price' => null, ':cash_balance' => $cash,
-            ':equity_after' => $cash, ':unrealized_pnl_usd' => 0,
-        ]);
-        return ['ok' => true, 'executed' => true, 'events' => 1, 'position' => 'FLAT', 'price' => $price, 'reason' => 'lateral_closed_position'];
-    }
     $desired = $tradeLabel === 2 ? 'LONG' : 'SHORT';
     if ($state['side'] === $desired) {
         return ['ok' => true, 'executed' => false, 'reason' => 'same_position', 'position' => $desired];
@@ -213,7 +206,10 @@ function cronTrade(PDO $pdo): array
         ':predicted_label' => $tradeLabel, ':was_correct' => 0, ':neighbors_count' => (int)$prediction['count'],
         ':similarity' => (float)$prediction['similarity'], ':probability_up' => (float)$prediction['frequencies'][2],
         ':probability_flat' => (float)$prediction['frequencies'][1], ':probability_down' => (float)$prediction['frequencies'][0],
-        ':notes' => 'Abertura pelo cron central em tempo real.', ':position_side' => $desired, ':position_qty' => $qty,
+        ':notes' => (int)$prediction['label'] === 1
+            ? 'Abertura pelo cron central: lateral/scalp de ' . ($desired === 'LONG' ? '+0,05%.' : '-0,05%.')
+            : 'Abertura pelo cron central em tempo real.',
+        ':position_side' => $desired, ':position_qty' => $qty,
         ':position_entry_price' => $price, ':cash_balance' => $state['cash'], ':equity_after' => $state['cash'],
         ':unrealized_pnl_usd' => 0,
     ]);

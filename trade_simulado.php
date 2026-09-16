@@ -7,6 +7,7 @@ require_once __DIR__ . '/trade_signal_state.php';
 const LIVE_INITIAL_BALANCE = 100.0;
 const LIVE_THRESHOLD = 0.1;
 const LIVE_HORIZON_MINUTES = 5;
+const LIVE_LATERAL_SCALP_PCT = 0.05;
 
 function tsPdo(): PDO
 {
@@ -73,6 +74,16 @@ function tsUnrealized(array $state, float $price): float
     return 0.0;
 }
 
+function tsTradeLabel(array $prediction): int
+{
+    $label = (int)($prediction['label'] ?? 1);
+    if ($label !== 1) {
+        return $label;
+    }
+    $frequencies = $prediction['frequencies'] ?? [0, 0, 0];
+    return ((float)($frequencies[2] ?? 0)) >= ((float)($frequencies[0] ?? 0)) ? 2 : 0;
+}
+
 function tsInsert(PDO $pdo, string $runId, array $event): void
 {
     $sql = 'INSERT INTO trade_simulado (run_id, is_live, event_type, strategy_minutes, threshold_pct, initial_balance,
@@ -134,12 +145,6 @@ function tsExecute(PDO $pdo, int $intervalSeconds): array
     $data = spData(LIVE_HORIZON_MINUTES, LIVE_THRESHOLD);
     $prediction = $data['prediction'] ?? null;
     $latest = $data['latest'] ?? null;
-    tradeSignalSave($prediction, $latest, [
-        'source' => 'trade_simulado_execute',
-        'run_id' => $runId,
-        'minutes' => LIVE_HORIZON_MINUTES,
-        'threshold' => LIVE_THRESHOLD,
-    ]);
     if (!$prediction || !$latest) {
         return tsSnapshot($pdo, $runId, 'Sem previsao suficiente para executar.');
     }
@@ -147,42 +152,16 @@ function tsExecute(PDO $pdo, int $intervalSeconds): array
     $price = (float)$latest['btc'];
     $time = date('Y-m-d H:i:s', (int)$latest['time']);
     $state = tsLastState($pdo, $runId);
-    $tradeLabel = (int)$prediction['label'];
-    if ($tradeLabel === 1) {
-        if ($state['side'] === 'FLAT') {
-            return tsSnapshot($pdo, $runId, 'Sem ordem: previsao atual lateral.');
-        }
-        $pnl = tsUnrealized($state, $price);
-        $cash = max(0.0, $state['cash'] + $pnl);
-        $entry = (float)$state['entry'];
-        $btcReturn = ($price / $entry - 1) * 100;
-        $tradeReturn = $state['side'] === 'LONG' ? $btcReturn : -$btcReturn;
-        tsInsert($pdo, $runId, [
-            'event_type' => 'CLOSE_' . $state['side'],
-            'side' => $state['side'],
-            'time' => $time,
-            'price' => $price,
-            'entry_price' => $entry,
-            'btc_return_pct' => $btcReturn,
-            'trade_return_pct' => $tradeReturn,
-            'pnl_usd' => $pnl,
-            'balance_before' => $state['cash'],
-            'cash_balance' => $cash,
-            'equity_after' => $cash,
-            'unrealized_pnl_usd' => 0,
-            'position_side' => 'FLAT',
-            'position_qty' => 0,
-            'position_entry_price' => null,
-            'predicted_label' => $tradeLabel,
-            'neighbors_count' => (int)$prediction['count'],
-            'similarity' => (float)$prediction['similarity'],
-            'probability_up' => (float)$prediction['frequencies'][2],
-            'probability_flat' => (float)$prediction['frequencies'][1],
-            'probability_down' => (float)$prediction['frequencies'][0],
-            'notes' => 'Fechamento porque a previsao atual ficou lateral.',
-        ]);
-        return tsSnapshot($pdo, $runId, 'Posicao fechada: previsao atual lateral.');
-    }
+    $tradeLabel = tsTradeLabel($prediction);
+    tradeSignalSave($prediction, $latest, [
+        'source' => 'trade_simulado_execute',
+        'run_id' => $runId,
+        'minutes' => LIVE_HORIZON_MINUTES,
+        'threshold' => LIVE_THRESHOLD,
+        'trade_label' => $tradeLabel,
+        'lateral_scalp_pct' => LIVE_LATERAL_SCALP_PCT,
+        'notes' => (int)$prediction['label'] === 1 ? 'Lateral operado como scalp simulado de 0,05%.' : null,
+    ]);
     $desired = $tradeLabel === 2 ? 'LONG' : 'SHORT';
     if ($state['side'] === $desired) {
         return tsSnapshot($pdo, $runId, 'Posicao mantida: previsao continua na mesma direcao.');
@@ -245,7 +224,9 @@ function tsExecute(PDO $pdo, int $intervalSeconds): array
         'probability_up' => (float)$prediction['frequencies'][2],
         'probability_flat' => (float)$prediction['frequencies'][1],
         'probability_down' => (float)$prediction['frequencies'][0],
-        'notes' => 'Abertura em tempo real por previsao de ' . ($desired === 'LONG' ? 'alta.' : 'baixa.'),
+        'notes' => (int)$prediction['label'] === 1
+            ? 'Abertura em tempo real por lateral/scalp de ' . ($desired === 'LONG' ? '+0,05%.' : '-0,05%.')
+            : 'Abertura em tempo real por previsao de ' . ($desired === 'LONG' ? 'alta.' : 'baixa.'),
     ];
 
     foreach ($events as $event) {
@@ -263,6 +244,8 @@ function tsSnapshot(PDO $pdo, string $runId, string $message = ''): array
         'run_id' => $runId,
         'minutes' => LIVE_HORIZON_MINUTES,
         'threshold' => LIVE_THRESHOLD,
+        'trade_label' => isset($data['prediction']) && $data['prediction'] ? tsTradeLabel($data['prediction']) : null,
+        'lateral_scalp_pct' => LIVE_LATERAL_SCALP_PCT,
     ]);
     $price = $latest ? (float)$latest['btc'] : 0.0;
     $state = tsLastState($pdo, $runId);
@@ -371,7 +354,7 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 <div class="wrap">
 <header class="topbar"><div class="brand"><a class="coin" href="index.php">B</a><div><h1>Trade Simulado</h1><small>Execução simulada contínua</small></div></div><nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Hist&oacute;rico com gr&aacute;fico</a><a href="graficos_selecionados.php">Gr&aacute;ficos selecionados</a><a href="super_previsao.php">Super Previsão</a><a href="trade_simulado.php" aria-current="page">Trade simulado</a></nav></header>
 <main>
-<section class="hero"><div><h2>Robô simulado de compra e venda</h2><p>A cada intervalo, o sistema usa a previsão atual dos 50 indicadores em tempo real. Se der alta, compra; se der baixa, vende; se ficar lateral, fecha a posição aberta ou aguarda fora. O teste no passado entra apenas como validação da estratégia. Nenhuma ordem real é enviada.</p></div><form class="controls" method="post"><select name="interval" id="interval"><option value="60" <?= $interval === 60 ? 'selected' : '' ?>>1 minuto</option><option value="300" <?= $interval === 300 ? 'selected' : '' ?>>5 minutos</option></select><button class="button primary" type="submit">Executar agora</button></form></section>
+<section class="hero"><div><h2>Robô simulado de compra e venda</h2><p>A cada intervalo, o sistema usa a previsão atual dos 50 indicadores em tempo real. Se der alta, compra; se der baixa, vende; se ficar lateral, faz um scalp simulado de +0,05% ou -0,05% conforme o lado mais forte das probabilidades. O teste no passado entra apenas como validação da estratégia. Nenhuma ordem real é enviada.</p></div><form class="controls" method="post"><select name="interval" id="interval"><option value="60" <?= $interval === 60 ? 'selected' : '' ?>>1 minuto</option><option value="300" <?= $interval === 300 ? 'selected' : '' ?>>5 minutos</option></select><button class="button primary" type="submit">Executar agora</button></form></section>
 <div class="notice" id="status"><?= htmlspecialchars($snapshot['message'] ?: 'Monitorando a simulação.', ENT_QUOTES, 'UTF-8') ?></div>
 <section class="cards">
   <div class="card"><span>Saldo inicial</span><b><?= brMoney(LIVE_INITIAL_BALANCE) ?></b></div>

@@ -1,6 +1,6 @@
 {
-    "updated_at": "2026-09-16T20:13:20-03:00",
-    "updated_ts": 1789600400,
+    "updated_at": "2026-09-16T20:35:14-03:00",
+    "updated_ts": 1789601714,
     "source": "trade_simulado_snapshot",
     "run_id": "live_20260916",
     "minutes": 5,
@@ -8,6 +8,9 @@
     "label": 1,
     "signal": "lateral",
     "is_directional": false,
+    "trade_label": 0,
+    "trade_signal": "baixa",
+    "lateral_scalp_pct": 0.05,
     "btc_price": 75721.2,
     "signal_time": "2026-09-16T20:04:47-03:00",
     "signal_ts": 1789599887,
