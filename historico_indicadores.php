@@ -72,7 +72,7 @@ $selectedChartSeries = $chartSelection['selected_series'] ?? [];
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Histórico dos Indicadores</title>
 <style>
-:root{--bg:#071019;--panel:#111d2b;--line:rgba(255,255,255,.08);--text:#eef5ff;--muted:#8fa2b8;--bull:#27e6a1;--bear:#ff5f73;--neutral:#f3bd4c;--accent:#f7b928;--blue:#5ca8ff;--radius:22px;--shadow:0 18px 50px rgba(0,0,0,.28)}*{box-sizing:border-box}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 12% -10%,rgba(247,185,40,.12),transparent 27%),radial-gradient(circle at 92% 4%,rgba(92,168,255,.11),transparent 25%),linear-gradient(180deg,#071019 0%,#0b1520 100%);min-height:100vh}.wrap{max-width:1600px;margin:auto;padding:28px 24px 60px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.coin{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(145deg,#f8cc52,#f4a914);color:#151515;font-weight:900;font-size:28px}.brand h1{margin:0;font-size:22px}.brand small,.muted{color:var(--muted)}.controls{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:9px 12px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:800;background:rgba(255,255,255,.025)}.chip.active{background:var(--accent);color:#19140a;border-color:transparent}.card{background:linear-gradient(180deg,rgba(19,33,48,.92),rgba(12,24,36,.94));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.layout{display:grid;grid-template-columns:320px 1fr;gap:18px}.panel{padding:18px}.chart-card{padding:18px;min-height:620px}.checklist{display:grid;gap:8px;max-height:520px;overflow:auto;padding-right:6px}.check{display:flex;align-items:center;gap:9px;padding:9px;border-radius:12px;background:rgba(255,255,255,.035);font-size:12px;color:var(--muted)}.check input{accent-color:var(--accent)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.btn{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--text);border-radius:12px;padding:9px 11px;font-weight:800;cursor:pointer}.settings{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px;padding:14px 16px}.settings label{display:grid;gap:5px;color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:900}.settings select{min-width:190px;border:1px solid var(--line);background:#0b1520;color:var(--text);border-radius:12px;padding:10px 12px;font-weight:800}.timer{text-align:right;color:var(--muted);font-size:12px}.timer b{display:block;color:var(--text);font-size:18px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.metric{padding:13px;border-radius:14px;background:rgba(255,255,255,.035)}.metric span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}.metric b{font-size:18px}canvas{width:100%;height:520px;display:block}.notice{margin-top:14px;padding:14px;border:1px solid rgba(243,189,76,.18);background:rgba(243,189,76,.055);border-radius:14px;color:#d7c69e;font-size:12px;line-height:1.5}.ok{margin-bottom:18px;padding:14px;border:1px solid rgba(39,230,161,.22);background:rgba(39,230,161,.08);border-radius:14px;color:#baf7dd}.errors{margin-bottom:18px;padding:14px;border:1px solid rgba(255,95,115,.25);background:rgba(255,95,115,.08);border-radius:14px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bull);box-shadow:0 0 16px var(--bull);margin-right:6px}@media(max-width:900px){.topbar{align-items:flex-start;flex-direction:column}.layout{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}.settings{align-items:flex-start;flex-direction:column}.timer{text-align:left}.wrap{padding:18px 12px 40px}}
+:root{--bg:#071019;--panel:#111d2b;--line:rgba(255,255,255,.08);--text:#eef5ff;--muted:#8fa2b8;--bull:#27e6a1;--bear:#ff5f73;--neutral:#f3bd4c;--accent:#f7b928;--blue:#5ca8ff;--radius:22px;--shadow:0 18px 50px rgba(0,0,0,.28)}*{box-sizing:border-box}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 12% -10%,rgba(247,185,40,.12),transparent 27%),radial-gradient(circle at 92% 4%,rgba(92,168,255,.11),transparent 25%),linear-gradient(180deg,#071019 0%,#0b1520 100%);min-height:100vh}.wrap{max-width:1600px;margin:auto;padding:28px 24px 60px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.coin{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(145deg,#f8cc52,#f4a914);color:#151515;font-weight:900;font-size:28px}.brand h1{margin:0;font-size:22px}.brand small,.muted{color:var(--muted)}.controls{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:9px 12px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:800;background:rgba(255,255,255,.025)}.chip.active{background:var(--accent);color:#19140a;border-color:transparent}.card{background:linear-gradient(180deg,rgba(19,33,48,.92),rgba(12,24,36,.94));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.layout{display:grid;grid-template-columns:320px 1fr;gap:18px}.panel{padding:18px}.chart-card{padding:18px;min-height:620px}.checklist{display:grid;gap:8px;max-height:520px;overflow:auto;padding-right:6px}.check{display:flex;align-items:center;gap:9px;padding:9px;border-radius:12px;background:rgba(255,255,255,.035);font-size:12px;color:var(--muted);position:relative}.check input{accent-color:var(--accent)}.check span{min-width:0;flex:1}.help{width:18px;height:18px;border:1px solid rgba(247,185,40,.35);border-radius:50%;background:rgba(247,185,40,.12);color:var(--accent);font-size:11px;font-weight:900;line-height:16px;display:grid;place-items:center;cursor:help;flex:0 0 auto}.help:hover:after,.help:focus:after{content:attr(data-legend);position:absolute;left:9px;right:9px;top:calc(100% + 6px);z-index:30;padding:11px 12px;border:1px solid rgba(247,185,40,.32);border-radius:12px;background:#101c2a;color:#eef5ff;box-shadow:0 16px 38px rgba(0,0,0,.42);font-size:12px;line-height:1.45;text-align:left;font-weight:650}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.btn{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--text);border-radius:12px;padding:9px 11px;font-weight:800;cursor:pointer}.settings{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px;padding:14px 16px}.settings label{display:grid;gap:5px;color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:900}.settings select{min-width:190px;border:1px solid var(--line);background:#0b1520;color:var(--text);border-radius:12px;padding:10px 12px;font-weight:800}.timer{text-align:right;color:var(--muted);font-size:12px}.timer b{display:block;color:var(--text);font-size:18px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.metric{padding:13px;border-radius:14px;background:rgba(255,255,255,.035)}.metric span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}.metric b{font-size:18px}canvas{width:100%;height:520px;display:block}.notice{margin-top:14px;padding:14px;border:1px solid rgba(243,189,76,.18);background:rgba(243,189,76,.055);border-radius:14px;color:#d7c69e;font-size:12px;line-height:1.5}.ok{margin-bottom:18px;padding:14px;border:1px solid rgba(39,230,161,.22);background:rgba(39,230,161,.08);border-radius:14px;color:#baf7dd}.errors{margin-bottom:18px;padding:14px;border:1px solid rgba(255,95,115,.25);background:rgba(255,95,115,.08);border-radius:14px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bull);box-shadow:0 0 16px var(--bull);margin-right:6px}@media(max-width:900px){.topbar{align-items:flex-start;flex-direction:column}.layout{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}.settings{align-items:flex-start;flex-direction:column}.timer{text-align:left}.wrap{padding:18px 12px 40px}}
 </style>
 </head>
 <body>
@@ -175,12 +175,81 @@ function saveChartSelection() {
   }, 250);
 }
 
+function indicatorLegend(name) {
+  const defs = [
+    ['Bitcoin', 'Preço do BTC normalizado no eixo do gráfico para comparar sua oscilação com os indicadores.'],
+    ['Ethereum', 'Preço do ETH normalizado no eixo do gráfico para comparar sua oscilação com BTC e os indicadores.'],
+    ['EMA 9', 'Média móvel exponencial curta contra a média de 21 períodos. Mostra se o preço recente está ganhando ou perdendo força no curto prazo.'],
+    ['EMA 50', 'Compara médias exponenciais de 50 e 200 períodos. EMA 50 acima da 200 sugere tendência principal positiva; abaixo sugere tendência negativa.'],
+    ['EMA 200', 'Compara o preço atual com a média exponencial de 200 períodos, usada como referência de tendência longa.'],
+    ['SMA 20', 'Compara médias móveis simples de 20 e 50 períodos. Ajuda a ver se o ritmo recente está acima ou abaixo da tendência curta.'],
+    ['Inclinação', 'Mede a inclinação da média móvel. Média subindo indica aceleração da tendência; caindo indica perda de força.'],
+    ['ADX', 'ADX mede a força da tendência; +DI e -DI indicam qual lado domina. ADX alto com +DI maior favorece alta, com -DI maior favorece baixa.'],
+    ['Supertrend', 'Indicador baseado em ATR que acompanha o preço com bandas de volatilidade. Preço acima favorece regime comprador; abaixo favorece vendedor.'],
+    ['Ichimoku', 'Tenkan e Kijun são linhas de equilíbrio do Ichimoku. Tenkan acima da Kijun indica impulso comprador; abaixo indica impulso vendedor.'],
+    ['Donchian', 'Canal formado pela máxima e mínima recentes. Preço perto do topo mostra força; perto da base mostra fraqueza.'],
+    ['RSI 14', 'Índice de Força Relativa de 14 períodos. Oscilador de momentum; acima de 70 costuma indicar sobrecompra e abaixo de 30 sobrevenda.'],
+    ['RSI 7', 'RSI mais curto e sensível. Reage rápido ao momentum imediato, mas também gera mais ruído.'],
+    ['MACD', 'MACD compara EMAs de 12 e 26 períodos; o histograma mostra a diferença contra a linha de sinal. Positivo indica aceleração compradora.'],
+    ['Stochastic', 'Oscilador Estocástico: %K mostra onde o fechamento está dentro da faixa máxima-mínima recente; %D é a média suavizada do %K. Acima de 80 sugere sobrecompra e abaixo de 20 sobrevenda.'],
+    ['Stoch RSI', 'Aplica a fórmula estocástica ao RSI, não ao preço. Mostra se o RSI está perto do topo ou da base da própria faixa recente.'],
+    ['ROC', 'Rate of Change mede a variação percentual do preço contra períodos atrás. Valor positivo indica momentum de alta; negativo indica queda.'],
+    ['CCI', 'Commodity Channel Index compara o preço típico com sua média. Leituras altas sugerem força; leituras baixas sugerem fraqueza.'],
+    ['Williams', 'Williams %R mede o fechamento dentro da faixa máxima-mínima recente em escala de 0 a -100. Perto de 0 indica força; perto de -100 indica fraqueza.'],
+    ['Momentum 10', 'Diferença entre o preço atual e o preço de 10 candles atrás. Positivo mostra avanço; negativo mostra recuo.'],
+    ['PPO', 'Percentage Price Oscillator é uma versão percentual do MACD. Facilita comparar momentum entre preços diferentes.'],
+    ['Volume relativo', 'Compara o volume atual com a média recente. Volume acima da média aumenta a confiança no movimento do candle.'],
+    ['OBV', 'On-Balance Volume soma volume em candles de alta e subtrai em candles de baixa. Subindo sugere acumulação; caindo sugere distribuição.'],
+    ['MFI', 'Money Flow Index combina preço e volume, funcionando como um RSI ponderado por volume. Acima de 80 sugere sobrecompra; abaixo de 20 sobrevenda.'],
+    ['Chaikin', 'Chaikin Money Flow mede pressão de compra ou venda usando fechamento dentro do candle e volume. Positivo sugere acumulação.'],
+    ['VWAP', 'Preço médio ponderado por volume. Preço acima do VWAP indica negociação acima do valor médio do período; abaixo indica fraqueza relativa.'],
+    ['Accumulation', 'Linha de Acumulação/Distribuição combina local do fechamento no candle com volume. Alta na linha indica fluxo acumulador.'],
+    ['Price Volume Trend', 'PVT acumula volume ponderado pela variação percentual do preço. Ajuda a confirmar tendências com participação de volume.'],
+    ['Force Index', 'Force Index combina variação de preço e volume para medir a força do movimento. Positivo favorece compradores; negativo favorece vendedores.'],
+    ['Taker Buy', 'Percentual de volume executado por compradores agressivos. Acima de 50% mostra mais compras a mercado; abaixo mostra mais vendas a mercado.'],
+    ['Confirmação', 'Confirma se a direção do preço veio acompanhada por expansão de volume. Movimento com volume tende a ter mais validade.'],
+    ['Bollinger Position', 'Mostra onde o preço está dentro das Bandas de Bollinger. Perto da banda superior indica força/sobrecompra; perto da inferior indica fraqueza/sobrevenda.'],
+    ['Bollinger Bandwidth', 'Mede a largura das Bandas de Bollinger. Largura aumentando indica volatilidade em expansão; contraindo indica compressão.'],
+    ['ATR', 'Average True Range mede volatilidade média. ATR maior indica candles mais amplos, mas não define direção sozinho.'],
+    ['Keltner', 'Canal baseado em média móvel e ATR. Preço na parte superior sugere força; na inferior sugere fraqueza.'],
+    ['Estrutura', 'Leitura de máximas e mínimas. HH/HL indica estrutura de alta; LH/LL indica estrutura de baixa.'],
+    ['Choppiness', 'Mede se o mercado está tendencial ou lateral. Valor baixo sugere tendência; valor alto sugere mercado travado/choppy.'],
+    ['Volatilidade Realizada', 'Volatilidade calculada pelos retornos recentes. Quando sobe, o mercado está se movendo com mais intensidade.'],
+    ['Impulso do Candle', 'Compara o corpo do candle com o range total. Corpo grande mostra decisão; corpo pequeno mostra indecisão.'],
+    ['Range 20', 'Mostra a posição do preço dentro da faixa dos últimos 20 candles. Topo da faixa favorece força; base favorece fraqueza.'],
+    ['Alinhamento', 'Compara retornos de 3 e 12 candles. Quando ambos apontam na mesma direção, há alinhamento de curtíssimo e curto prazo.'],
+    ['Order Book', 'Compara liquidez em bids e asks no livro de ofertas. Mais bids pode indicar suporte; mais asks pode indicar resistência.'],
+    ['Bid/Ask', 'Spread entre melhor compra e melhor venda. Spread estreito indica execução mais eficiente; spread largo indica menor liquidez.'],
+    ['Walls', 'Compara grandes ordens próximas no topo do book. Paredes de compra podem sustentar preço; paredes de venda podem limitar alta.'],
+    ['Depth', 'Liquidez próxima do preço atual dentro de +/-0,25%. Mais bids favorece suporte próximo; mais asks favorece pressão vendedora.'],
+    ['Funding', 'Taxa paga entre longs e shorts nos futuros perpétuos. Funding muito positivo indica longs lotados; muito negativo indica shorts lotados.'],
+    ['Open Interest + Preço', 'Compara mudança no open interest com o preço. OI subindo junto da direção do preço sugere entrada de novas posições.'],
+    ['Open Interest Trend', 'Mostra se a alavancagem agregada está aumentando ou diminuindo ao longo do período analisado.'],
+    ['Basis', 'Diferença entre preço de marca do futuro e preço índice. Prêmio indica futuro acima do índice; desconto indica abaixo.'],
+    ['Global Long/Short', 'Razão entre contas compradas e vendidas. Extremos podem indicar consenso excessivo e risco de movimento contrário.'],
+    ['Top Traders', 'Razão de posições dos maiores traders. Ajuda a ver se players grandes estão mais expostos em long ou short.']
+  ];
+  const match = defs.find(([needle]) => name.toLowerCase().includes(needle.toLowerCase()));
+  return match ? match[1] : 'Indicador técnico usado como leitura auxiliar de tendência, momentum, volume, volatilidade ou posicionamento.';
+}
+
+function escapeAttr(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[char]));
+}
+
 function buildChecks() {
   checks.innerHTML = '';
   series.forEach((item, idx) => {
     const label = document.createElement('label');
     label.className = 'check';
-    label.innerHTML = `<input type="checkbox" data-idx="${idx}" ${item.checked ? 'checked' : ''}> <span>${item.label}</span>`;
+    const legend = indicatorLegend(item.label);
+    label.innerHTML = `<input type="checkbox" data-idx="${idx}" ${item.checked ? 'checked' : ''}> <span>${escapeAttr(item.label)}</span> <button class="help" type="button" title="${escapeAttr(legend)}" data-legend="${escapeAttr(legend)}" aria-label="Descrição de ${escapeAttr(item.label)}">?</button>`;
     checks.appendChild(label);
   });
 }
@@ -245,6 +314,12 @@ function draw() {
 }
 
 buildChecks();
+checks.addEventListener('click', event => {
+  if (event.target.closest('.help')) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+});
 checks.addEventListener('change', () => { draw(); saveChartSelection(); });
 document.getElementById('all').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = true); draw(); saveChartSelection(); });
 document.getElementById('none').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = false); draw(); saveChartSelection(); });

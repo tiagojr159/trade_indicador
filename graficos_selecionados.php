@@ -56,7 +56,7 @@ $nextSaveTimestamp = $lastSavedTimestamp === false ? time() : $lastSavedTimestam
 <title>Gráficos Selecionados</title>
 <style>
 :root{--bg:#071019;--panel:#111d2b;--line:rgba(255,255,255,.08);--text:#eef5ff;--muted:#8fa2b8;--bull:#27e6a1;--bear:#ff5f73;--neutral:#f3bd4c;--accent:#f7b928;--blue:#5ca8ff;--radius:18px;--shadow:0 18px 50px rgba(0,0,0,.28)}
-*{box-sizing:border-box}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 12% -10%,rgba(247,185,40,.12),transparent 27%),radial-gradient(circle at 92% 4%,rgba(92,168,255,.11),transparent 25%),linear-gradient(180deg,#071019 0%,#0b1520 100%);min-height:100vh}.wrap{max-width:1600px;margin:auto;padding:28px 24px 60px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.coin{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(145deg,#f8cc52,#f4a914);color:#151515;font-weight:900;font-size:28px}.brand h1{margin:0;font-size:22px}.brand small,.muted{color:var(--muted)}.controls{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:9px 12px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:800;background:rgba(255,255,255,.025)}.chip.active{background:var(--accent);color:#19140a;border-color:transparent}.card{background:linear-gradient(180deg,rgba(19,33,48,.92),rgba(12,24,36,.94));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.metric{padding:16px}.metric span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:900}.metric b{font-size:22px}.metric .bull,.bull{color:var(--bull)}.metric .bear,.bear{color:var(--bear)}.metric .neutral,.neutral{color:var(--neutral)}.layout{display:grid;grid-template-columns:330px 1fr;gap:18px}.panel{padding:18px}.chart-card{padding:18px;min-height:660px}.checklist{display:grid;gap:8px;max-height:620px;overflow:auto;padding-right:6px}.check{display:flex;align-items:center;gap:9px;padding:9px;border-radius:12px;background:rgba(255,255,255,.035);font-size:12px;color:var(--muted)}.check input{accent-color:var(--accent)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.btn{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--text);border-radius:12px;padding:9px 11px;font-weight:800;cursor:pointer}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;color:var(--muted);font-size:12px}.legend span{display:inline-flex;align-items:center;gap:6px}.swatch{width:10px;height:10px;border-radius:50%}canvas{width:100%;height:560px;display:block}.notice{margin-top:14px;padding:14px;border:1px solid rgba(243,189,76,.18);background:rgba(243,189,76,.055);border-radius:14px;color:#d7c69e;font-size:12px;line-height:1.5}.errors{margin-bottom:18px;padding:14px;border:1px solid rgba(255,95,115,.25);background:rgba(255,95,115,.08);border-radius:14px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bull);box-shadow:0 0 16px var(--bull);margin-right:6px}@media(max-width:1000px){.summary{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}}@media(max-width:640px){.wrap{padding:18px 12px 40px}.topbar{align-items:flex-start;flex-direction:column}.summary{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 12% -10%,rgba(247,185,40,.12),transparent 27%),radial-gradient(circle at 92% 4%,rgba(92,168,255,.11),transparent 25%),linear-gradient(180deg,#071019 0%,#0b1520 100%);min-height:100vh}.wrap{max-width:1600px;margin:auto;padding:28px 24px 60px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.brand{display:flex;gap:14px;align-items:center}.coin{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(145deg,#f8cc52,#f4a914);color:#151515;font-weight:900;font-size:28px}.brand h1{margin:0;font-size:22px}.brand small,.muted{color:var(--muted)}.controls{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:9px 12px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:800;background:rgba(255,255,255,.025)}.chip.active{background:var(--accent);color:#19140a;border-color:transparent}.card{background:linear-gradient(180deg,rgba(19,33,48,.92),rgba(12,24,36,.94));border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.metric{padding:16px}.metric span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:900}.metric b{font-size:22px}.metric .bull,.bull{color:var(--bull)}.metric .bear,.bear{color:var(--bear)}.metric .neutral,.neutral{color:var(--neutral)}.layout{display:grid;grid-template-columns:330px 1fr;gap:18px}.panel{padding:18px}.chart-card{padding:18px;min-height:660px}.checklist{display:grid;gap:8px;max-height:620px;overflow:auto;padding-right:6px}.check{display:flex;align-items:center;gap:9px;padding:9px;border-radius:12px;background:rgba(255,255,255,.035);font-size:12px;color:var(--muted);position:relative}.check input{accent-color:var(--accent)}.check span{min-width:0;flex:1}.help{width:18px;height:18px;border:1px solid rgba(247,185,40,.35);border-radius:50%;background:rgba(247,185,40,.12);color:var(--accent);font-size:11px;font-weight:900;line-height:16px;display:grid;place-items:center;cursor:help;flex:0 0 auto}.help:hover:after,.help:focus:after{content:attr(data-legend);position:absolute;left:9px;right:9px;top:calc(100% + 6px);z-index:30;padding:11px 12px;border:1px solid rgba(247,185,40,.32);border-radius:12px;background:#101c2a;color:#eef5ff;box-shadow:0 16px 38px rgba(0,0,0,.42);font-size:12px;line-height:1.45;text-align:left;font-weight:650}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.btn{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--text);border-radius:12px;padding:9px 11px;font-weight:800;cursor:pointer}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;color:var(--muted);font-size:12px}.legend span{display:inline-flex;align-items:center;gap:6px}.swatch{width:10px;height:10px;border-radius:50%}canvas{width:100%;height:560px;display:block}.notice{margin-top:14px;padding:14px;border:1px solid rgba(243,189,76,.18);background:rgba(243,189,76,.055);border-radius:14px;color:#d7c69e;font-size:12px;line-height:1.5}.errors{margin-bottom:18px;padding:14px;border:1px solid rgba(255,95,115,.25);background:rgba(255,95,115,.08);border-radius:14px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bull);box-shadow:0 0 16px var(--bull);margin-right:6px}@media(max-width:1000px){.summary{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}}@media(max-width:640px){.wrap{padding:18px 12px 40px}.topbar{align-items:flex-start;flex-direction:column}.summary{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -190,12 +190,43 @@ function updateTrend() {
   document.getElementById('downProb').textContent = down + '%';
 }
 
+function indicatorLegend(name) {
+  const defs = [
+    ['Bitcoin', 'Preço do BTC normalizado no eixo do gráfico para comparar sua oscilação com os indicadores.'],
+    ['Ethereum', 'Preço do ETH normalizado no eixo do gráfico para comparar sua oscilação com BTC e os indicadores.'],
+    ['Média', 'Média simples dos indicadores selecionados. No modo “só BTC + ETH + média”, usa todos os indicadores focados e oculta as linhas individuais.'],
+    ['Stochastic', 'Oscilador Estocástico: %K mostra onde o fechamento está dentro da faixa máxima-mínima recente; %D é a média suavizada do %K. Acima de 80 sugere sobrecompra e abaixo de 20 sobrevenda.'],
+    ['Stoch RSI', 'Aplica a fórmula estocástica ao RSI, não ao preço. Mostra se o RSI está perto do topo ou da base da própria faixa recente.'],
+    ['Williams', 'Williams %R mede o fechamento dentro da faixa máxima-mínima recente em escala de 0 a -100. Perto de 0 indica força; perto de -100 indica fraqueza.'],
+    ['Volume relativo', 'Compara o volume atual com a média recente. Volume acima da média aumenta a confiança no movimento do candle.'],
+    ['Accumulation', 'Linha de Acumulação/Distribuição combina local do fechamento no candle com volume. Alta na linha indica fluxo acumulador.'],
+    ['Confirmação', 'Confirma se a direção do preço veio acompanhada por expansão de volume. Movimento com volume tende a ter mais validade.'],
+    ['Bollinger Bandwidth', 'Mede a largura das Bandas de Bollinger. Largura aumentando indica volatilidade em expansão; contraindo indica compressão.'],
+    ['ATR', 'Average True Range mede volatilidade média. ATR maior indica candles mais amplos, mas não define direção sozinho.'],
+    ['Volatilidade Realizada', 'Volatilidade calculada pelos retornos recentes. Quando sobe, o mercado está se movendo com mais intensidade.'],
+    ['Bid/Ask', 'Spread entre melhor compra e melhor venda. Spread estreito indica execução mais eficiente; spread largo indica menor liquidez.']
+  ];
+  const match = defs.find(([needle]) => name.toLowerCase().includes(needle.toLowerCase()));
+  return match ? match[1] : 'Indicador técnico usado como leitura auxiliar de tendência, momentum, volume, volatilidade ou posicionamento.';
+}
+
+function escapeAttr(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[char]));
+}
+
 function buildChecks() {
   checks.innerHTML = '';
   series.forEach(item => {
     const label = document.createElement('label');
     label.className = 'check';
-    label.innerHTML = `<input type="checkbox" data-key="${item.key}" ${item.checked ? 'checked' : ''}> <span>${item.label}</span>`;
+    const help = indicatorLegend(item.label);
+    label.innerHTML = `<input type="checkbox" data-key="${item.key}" ${item.checked ? 'checked' : ''}> <span>${escapeAttr(item.label)}</span> <button class="help" type="button" title="${escapeAttr(help)}" data-legend="${escapeAttr(help)}" aria-label="Descrição de ${escapeAttr(item.label)}">?</button>`;
     checks.appendChild(label);
   });
 }
@@ -265,6 +296,12 @@ function draw() {
 }
 
 buildChecks();
+checks.addEventListener('click', event => {
+  if (event.target.closest('.help')) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+});
 checks.addEventListener('change', draw);
 onlyAverage.addEventListener('change', draw);
 document.getElementById('all').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = true); draw(); });
