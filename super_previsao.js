@@ -67,14 +67,28 @@
 
   function render() {
     const p = data.prediction, m = data.metrics, last = data.latest;
-    const titles = {empty: 'Aguardando hist\u00f3rico', historical: 'Refer\u00eancia hist\u00f3rica', experimental: 'Sem sinal validado', signal: p ? `Sinal de ${labels[p.label].toLowerCase()}` : 'Sem sinal'};
+    const ranked = p ? [0, 1, 2].sort((a, b) => p.frequencies[b] - p.frequencies[a]) : [];
+    const topLabel = p ? ranked[0] : 1;
+    const forecastLabel = p ? p.label : 1;
+    const forecastFrequency = p ? p.frequencies[forecastLabel] : 0;
+    const lead = p ? Math.max(0, p.frequencies[ranked[0]] - p.frequencies[ranked[1]]) : 0;
+    const directionalEdge = p ? Math.abs(p.frequencies[2] - p.frequencies[0]) : 0;
+    const weak = !p || !data.validated || forecastFrequency < .45 || directionalEdge < .08;
+    const strength = !p ? 'Sem dados' : data.status === 'signal' ? 'Sinal forte' : weak ? 'Leitura fraca' : 'Leitura moderada';
     $('status').textContent = data.status === 'signal' ? 'SINAL ESTAT\u00cdSTICO' : 'AN\u00c1LISE EXPERIMENTAL';
-    $('signalTitle').textContent = titles[data.status];
-    $('signalTitle').className = data.status === 'signal' ? classes[p.label] : '';
+    $('signalTitle').textContent = 'Previs\u00e3o agora';
+    $('signalTitle').className = '';
+    $('forecastCard').className = `forecast-card ${p ? classes[forecastLabel] : 'flat'}`;
+    $('forecastLabel').className = p ? classes[forecastLabel] : 'flat';
+    $('forecastLabel').textContent = p ? labels[forecastLabel] : 'Aguardando';
+    $('forecastWindow').textContent = last ? `Pr\u00f3ximos ${data.minutes} minutos | BTC ${number(last.btc, 2)} USDT` : 'Aguardando coleta';
+    $('forecastStrength').textContent = strength;
+    $('forecastBar').style.width = `${Math.max(6, Math.min(100, (p ? Math.max(forecastFrequency, directionalEdge + lead) : 0) * 100))}%`;
     let detail = !last ? 'Nenhum registro dispon\u00edvel para comparar os indicadores.' :
       !p ? 'Ainda n\u00e3o h\u00e1 cen\u00e1rios conclu\u00eddos suficientes para este horizonte.' :
-      `Leitura dos cen\u00e1rios: ${labels[p.label].toLowerCase()} em ${data.minutes} minutos. ` +
-      (data.validated ? 'Consulte o teste no passado e a dispers\u00e3o dos resultados.' : 'O hist\u00f3rico ainda n\u00e3o sustenta uma antecipa\u00e7\u00e3o confi\u00e1vel.');
+      `Previs\u00e3o pelos 50 indicadores: ${labels[forecastLabel].toUpperCase()} nos pr\u00f3ximos ${data.minutes} minutos. ` +
+      (topLabel !== forecastLabel ? `A classe mais frequente nos cen\u00e1rios parecidos \u00e9 ${labels[topLabel].toLowerCase()} (${percent(p.frequencies[topLabel])}), ent\u00e3o trate como vi\u00e9s fraco. ` : '') +
+      (data.validated ? 'O teste temporal passou nos crit\u00e9rios definidos.' : 'Ainda \u00e9 experimental porque o hist\u00f3rico n\u00e3o sustenta um sinal forte.');
     if (last && !data.fresh) detail += ' Dados sem atualiza\u00e7\u00e3o recente; esta leitura n\u00e3o representa o mercado atual.';
     $('signalDetail').textContent = detail;
     $('reference').textContent = last ? `${date(last.time, true)} | BTC ${number(last.btc, 2)} USDT | Candle ${last.interval} | Horizonte at\u00e9 ${date(last.time + data.minutes * 60, true)}` : 'Aguardando coleta';
