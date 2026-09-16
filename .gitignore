@@ -2,3 +2,4 @@ config.php
 db_config.php
 dbconfig.php
 indicador_coleta.lock
+data/*.json
