@@ -27,8 +27,8 @@ try {
         $pdo->exec($schema);
     }
 
-    $stmt = $pdo->query('SELECT * FROM indicador_historico ORDER BY created_at DESC LIMIT 240');
-    $rows = array_reverse($stmt->fetchAll());
+    $stmt = $pdo->query('SELECT * FROM indicador_historico WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY created_at ASC');
+    $rows = $stmt->fetchAll();
 } catch (Throwable $e) {
     $error = $e->getMessage();
 }
@@ -61,25 +61,26 @@ $nextSaveTimestamp = $lastSavedTimestamp === false ? time() : $lastSavedTimestam
 </head>
 <body>
 <div class="wrap">
-<header class="topbar"><div class="brand"><div class="coin">B</div><div><h1>Gráficos Selecionados</h1><small><span class="dot"></span>BTC, ETH, mediana e sinais principais</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip active" href="graficos_selecionados.php">Gráficos selecionados</a></nav></header>
+<header class="topbar"><div class="brand"><div class="coin">B</div><div><h1>Gráficos Selecionados</h1><small><span class="dot"></span>BTC, ETH, média e sinais principais</small></div></div><nav class="controls"><a class="chip" href="index.php">Capa</a><a class="chip" href="indicadores.php">Indicadores</a><a class="chip" href="historico_indicadores.php">Histórico com gráfico</a><a class="chip active" href="graficos_selecionados.php">Gráficos selecionados</a></nav></header>
 <?php if ($error): ?><div class="errors"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 <section class="card metric" style="margin-bottom:18px"><span>Atualização automática a cada 1 minuto</span><b id="countdown">--:--</b></section>
 <section class="summary">
   <div class="card metric"><span>Tendência</span><b id="trendText" class="neutral">Aguardando</b></div>
   <div class="card metric"><span>Probabilidade de alta</span><b id="upProb">--%</b></div>
   <div class="card metric"><span>Probabilidade de baixa</span><b id="downProb">--%</b></div>
-  <div class="card metric"><span>Base analisada</span><b><?= count($rows) ?> registros</b></div>
+  <div class="card metric"><span>Base analisada 24h</span><b><?= count($rows) ?> registros</b></div>
 </section>
 <section class="layout">
   <aside class="card panel">
     <div class="muted">Linhas do gráfico</div>
-    <div class="actions"><button class="btn" type="button" id="all">Todos</button><button class="btn" type="button" id="none">Limpar</button><button class="btn" type="button" id="core">BTC + ETH + Mediana</button></div>
+    <label class="check" style="margin:12px 0"><input type="checkbox" id="onlyAverage"> <span>Mostrar só BTC + ETH + média</span></label>
+    <div class="actions"><button class="btn" type="button" id="all">Todos</button><button class="btn" type="button" id="none">Limpar</button><button class="btn" type="button" id="core">BTC + ETH + Média</button></div>
     <div class="checklist" id="checks"></div>
   </aside>
   <main class="card chart-card">
     <div class="legend" id="legend"></div>
     <canvas id="chart" width="1200" height="560"></canvas>
-    <div class="notice">A probabilidade é uma leitura heurística do histórico salvo: média dos sinais selecionados, inclinação recente da mediana e movimento recente do BTC. Ela ajuda a leitura de tendência, mas não é recomendação automática de compra ou venda.</div>
+    <div class="notice">A probabilidade é uma leitura heurística das últimas 24 horas salvas: média dos sinais selecionados, inclinação recente da média e movimento recente do BTC. Ela ajuda a leitura de tendência, mas não é recomendação automática de compra ou venda.</div>
   </main>
 </section>
 </div>
@@ -92,10 +93,11 @@ const countdown = document.getElementById('countdown');
 const series = [
   {key:'btc_price', label:'Bitcoin', color:'#f7b928', normalize:true, checked:true},
   {key:'eth_price', label:'Ethereum', color:'#5ca8ff', normalize:true, checked:true},
-  {key:'median', label:'Mediana dos marcados', color:'#eef5ff', normalize:false, checked:true, median:true},
+  {key:'median', label:'Média dos indicadores', color:'#eef5ff', normalize:false, checked:true, median:true},
   ...focusedIndicators
 ];
 const checks = document.getElementById('checks');
+const onlyAverage = document.getElementById('onlyAverage');
 const legend = document.getElementById('legend');
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
@@ -135,7 +137,11 @@ function tickAutoUpdate() {
 }
 
 function indicatorSeries() { return series.filter(s => !s.normalize && !s.median); }
-function activeIndicatorKeys() { return indicatorSeries().filter(s => document.querySelector(`[data-key="${s.key}"]`)?.checked).map(s => s.key); }
+function activeIndicatorKeys() {
+  if (onlyAverage.checked) return indicatorSeries().map(s => s.key);
+  const selected = indicatorSeries().filter(s => document.querySelector(`[data-key="${s.key}"]`)?.checked).map(s => s.key);
+  return selected.length ? selected : indicatorSeries().map(s => s.key);
+}
 function pct(a, b) { return b === 0 || b === null || a === null ? 0 : ((a - b) / b) * 100; }
 
 function medianValues() {
@@ -229,7 +235,9 @@ function draw() {
     updateTrend();
     return;
   }
-  const active = series.filter(s => document.querySelector(`[data-key="${s.key}"]`)?.checked);
+  const active = onlyAverage.checked
+    ? series.filter(s => ['btc_price', 'eth_price', 'median'].includes(s.key))
+    : series.filter(s => document.querySelector(`[data-key="${s.key}"]`)?.checked);
   buildLegend(active);
   active.forEach(s => {
     const vals = valuesFor(s);
@@ -258,6 +266,7 @@ function draw() {
 
 buildChecks();
 checks.addEventListener('change', draw);
+onlyAverage.addEventListener('change', draw);
 document.getElementById('all').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = true); draw(); });
 document.getElementById('none').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = false); draw(); });
 document.getElementById('core').addEventListener('click', () => { checks.querySelectorAll('input').forEach(i => i.checked = ['btc_price','eth_price','median'].includes(i.dataset.key)); draw(); });

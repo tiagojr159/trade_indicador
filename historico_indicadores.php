@@ -27,8 +27,8 @@ try {
         $pdo->exec($schema);
     }
 
-    $stmt = $pdo->query('SELECT * FROM indicador_historico ORDER BY created_at DESC LIMIT 240');
-    $rows = array_reverse($stmt->fetchAll());
+    $stmt = $pdo->query('SELECT * FROM indicador_historico WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY created_at ASC');
+    $rows = $stmt->fetchAll();
     foreach (array_reverse($rows) as $row) {
         if (!empty($row['indicator_names'])) {
             $decoded = json_decode((string)$row['indicator_names'], true);
@@ -92,7 +92,7 @@ $selectedChartSeries = $chartSelection['selected_series'] ?? [];
 <?php if ($error): ?><div class="errors"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 <section class="layout">
 <aside class="card panel"><div class="muted">Escolha as linhas do gráfico</div><div class="actions"><button class="btn" type="button" id="all">Todos</button><button class="btn" type="button" id="none">Limpar</button><button class="btn" type="button" id="base">BTC + ETH</button></div><div class="checklist" id="checks"></div></aside>
-<main class="card chart-card"><div class="metrics"><div class="metric"><span>Registros</span><b><?= count($rows) ?></b></div><div class="metric"><span>Último BTC</span><b><?= $rows ? '$ ' . number_format((float)end($rows)['btc_price'], 2, ',', '.') : '—' ?></b></div><div class="metric"><span>Último ETH</span><b><?= $rows ? '$ ' . number_format((float)end($rows)['eth_price'], 2, ',', '.') : '—' ?></b></div></div><canvas id="chart" width="1200" height="520"></canvas><div class="notice">Os indicadores são gravados como score numérico de -2 a +2. BTC e ETH aparecem normalizados no mesmo eixo para comparar a oscilação junto com os sinais.</div></main>
+<main class="card chart-card"><div class="metrics"><div class="metric"><span>Registros 24h</span><b><?= count($rows) ?></b></div><div class="metric"><span>Último BTC</span><b><?= $rows ? '$ ' . number_format((float)end($rows)['btc_price'], 2, ',', '.') : '—' ?></b></div><div class="metric"><span>Último ETH</span><b><?= $rows ? '$ ' . number_format((float)end($rows)['eth_price'], 2, ',', '.') : '—' ?></b></div></div><canvas id="chart" width="1200" height="520"></canvas><div class="notice">O gráfico mostra sempre as últimas 24 horas. Os indicadores são gravados como score numérico de -2 a +2. BTC e ETH aparecem normalizados no mesmo eixo para comparar a oscilação junto com os sinais.</div></main>
 </section>
 </div>
 <script>
