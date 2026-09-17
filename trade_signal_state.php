@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-const TRADE_SIGNAL_STATE_FILE = __DIR__ . '/data/trade_signal_state.json';
+if (!defined('TRADE_SIGNAL_STATE_FILE')) define('TRADE_SIGNAL_STATE_FILE', __DIR__ . '/data/trade_signal_state.json');
 
 function tradeSignalLabel(int $label): string
 {
@@ -24,7 +24,7 @@ function tradeSignalSave(?array $prediction, ?array $latest, array $extra = []):
         'is_directional' => $label !== 1,
         'trade_label' => $extra['trade_label'] ?? null,
         'trade_signal' => isset($extra['trade_label']) ? tradeSignalLabel((int)$extra['trade_label']) : null,
-        'lateral_scalp_pct' => $extra['lateral_scalp_pct'] ?? null,
+        'model_version' => $extra['model_version'] ?? null,
         'btc_price' => $latest ? (float)($latest['btc'] ?? 0) : null,
         'signal_time' => $latest && isset($latest['time']) ? date('c', (int)$latest['time']) : null,
         'signal_ts' => $latest['time'] ?? null,
@@ -49,6 +49,11 @@ function tradeSignalRead(): ?array
     if (!is_file(TRADE_SIGNAL_STATE_FILE)) {
         return null;
     }
-    $data = json_decode((string)file_get_contents(TRADE_SIGNAL_STATE_FILE), true);
+    $handle = fopen(TRADE_SIGNAL_STATE_FILE, 'r');
+    if (!$handle) return null;
+    flock($handle, LOCK_SH);
+    $data = json_decode((string)stream_get_contents($handle), true);
+    flock($handle, LOCK_UN);
+    fclose($handle);
     return is_array($data) ? $data : null;
 }

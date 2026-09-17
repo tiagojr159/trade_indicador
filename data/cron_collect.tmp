@@ -1,9 +1,3 @@
-<?php
-declare(strict_types=1);
-require_once __DIR__ . '/indicador_settings.php';
-require_once __DIR__ . '/trade_exec.php';
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Content-Type: application/json; charset=utf-8');
 function cronCollectIndicators(PDO $pdo): array
 {
     $schema = file_get_contents(__DIR__ . '/criar_tabela_indicadores.sql');
@@ -48,32 +42,3 @@ function cronCollectIndicators(PDO $pdo): array
     return ['ok' => true, 'saved' => true, 'id' => (int)$pdo->lastInsertId(),
         'btc_price' => $currentPrice ?? null, 'eth_price' => $ethPrice, 'indicators' => min(50, count($inds))];
 }
-
-$lock = fopen(__DIR__ . '/cron_trade.lock', 'c');
-if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
-    if ($lock) fclose($lock);
-    echo json_encode(['ok'=>true,'locked'=>true]);
-    exit;
-}
-$result = ['ok'=>true,'generated'=>date('c'),'tasks'=>[]];
-try {
-    $pdo = tsPdo();
-    // A collection failure must not prevent monitoring the latest usable quote.
-    try {
-        $collectionLock = fopen(__DIR__.'/indicador_coleta.lock','c');
-        if (!$collectionLock || !flock($collectionLock, LOCK_EX | LOCK_NB)) {
-            $result['tasks']['coleta'] = ['ok'=>true,'locked'=>true];
-        } else {
-            try { $result['tasks']['coleta'] = cronCollectIndicators($pdo); }
-            finally { flock($collectionLock, LOCK_UN); }
-        }
-        if ($collectionLock) fclose($collectionLock);
-    } catch (Throwable $error) { $result['tasks']['coleta'] = ['ok'=>false,'error'=>$error->getMessage()]; }
-    $data = spData(LIVE_HORIZON_MINUTES,LIVE_THRESHOLD);
-    $result['tasks']['super_previsao'] = $data;
-    $result['tasks']['trade_simulado'] = tsExecute($pdo,60,$data);
-} catch (Throwable $error) {
-    $result['ok']=false;
-    $result['error']=$error->getMessage();
-} finally { flock($lock,LOCK_UN); fclose($lock); }
-echo json_encode($result,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);

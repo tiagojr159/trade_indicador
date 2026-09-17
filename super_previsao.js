@@ -90,11 +90,12 @@
       (topLabel !== forecastLabel ? `A classe mais frequente nos cen\u00e1rios parecidos \u00e9 ${labels[topLabel].toLowerCase()} (${percent(p.frequencies[topLabel])}), ent\u00e3o trate como vi\u00e9s fraco. ` : '') +
       (data.validated ? 'O teste temporal passou nos crit\u00e9rios definidos.' : 'Ainda \u00e9 experimental porque o hist\u00f3rico n\u00e3o sustenta um sinal forte.');
     if (last && !data.fresh) detail += ' Dados sem atualiza\u00e7\u00e3o recente; esta leitura n\u00e3o representa o mercado atual.';
+    if (data.decision) detail += ` Decisão simulada: ${['vender', 'aguardar', 'comprar'][data.decision.label]}. ${data.decision.reason}`;
     $('signalDetail').textContent = detail;
     $('reference').textContent = last ? `${date(last.time, true)} | BTC ${number(last.btc, 2)} USDT | Candle ${last.interval} | Horizonte at\u00e9 ${date(last.time + data.minutes * 60, true)}` : 'Aguardando coleta';
     $('frequencies').innerHTML = [2, 1, 0].map(i => `<div><b class="${classes[i]}">${p ? percent(p.frequencies[i]) : '--'}</b><span>${labels[i]}</span></div>`).join('');
     $('stack').innerHTML = p ? [2, 1, 0].map(i => `<i class="${classes[i]}" style="width:${p.frequencies[i] * 100}%"></i>`).join('') : '';
-    $('neighborsSummary').textContent = p ? `${p.count} cen\u00e1rios sem sobreposi\u00e7\u00e3o | Semelhan\u00e7a m\u00e9dia ${percent(p.similarity)}` : 'Cen\u00e1rios insuficientes';
+    $('neighborsSummary').textContent = p ? `${p.count} cenários sem sobreposição (${number(p.effective || p.count)} efetivos) | Modelo ${p.model === 'adaptive' ? 'adaptativo' : 'de referência'} | Semelhança ${percent(p.similarity)}` : 'Cenários insuficientes';
     $('accuracy').textContent = m ? percent(m.accuracy) : '--';
     $('testCount').textContent = m ? `${m.correct} de ${m.count} testes | IC 95%: ${percent(m.low)} a ${percent(m.high)}` : 'Nenhum teste eleg\u00edvel';
     $('baseline').textContent = m ? percent(m.baseline) : '--';

@@ -1,30 +1,3 @@
-<?php
-declare(strict_types=1);
-require_once __DIR__ . '/trade_exec.php';
-function brMoney(float $value): string { return '$ ' . number_format($value, 2, ',', '.'); }
-function brPct(float $value): string { return ($value > 0 ? '+' : '') . number_format($value, 2, ',', '.') . '%'; }
-function brDateTime(int $time): string { return date('d/m H:i', $time); }
-$pdo = tsPdo();
-$interval = (int)($_POST['interval'] ?? $_GET['interval'] ?? 60);
-$message = '';
-if (isset($_GET['run']) || ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    $execution = tsExecute($pdo, $interval);
-    $message = $execution['message'];
-}
-$snapshot = tsSnapshot($pdo, tsLiveRunId($pdo), $message);
-header('Cache-Control: no-store');
-if (($_GET['format'] ?? '') === 'json') {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-    exit;
-}
-$prediction = $snapshot['prediction'];
-$state = $snapshot['state'];
-$orders = $snapshot['orders'];
-$realized = $state['cash'] - LIVE_INITIAL_BALANCE;
-$equityPnl = $snapshot['equity'] - LIVE_INITIAL_BALANCE;
-$backtestData = spData(LIVE_HORIZON_MINUTES, LIVE_THRESHOLD);
-$backtest = tsBacktest($backtestData);
 ?>
 <!doctype html>
 <html lang="pt-BR">
@@ -41,46 +14,38 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 <div class="wrap">
 <header class="topbar"><div class="brand"><a class="coin" href="index.php">B</a><div><h1>Trade Simulado</h1><small>Execução simulada contínua</small></div></div><nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Hist&oacute;rico com gr&aacute;fico</a><a href="graficos_selecionados.php">Gr&aacute;ficos selecionados</a><a href="super_previsao.php">Super Previsão</a><a href="trade_simulado.php" aria-current="page">Trade simulado</a></nav></header>
 <main>
-<section class="hero"><div><h2>Robô simulado de compra e venda</h2><p>Os 50 indicadores alimentam o mesmo motor da Super Previsão. O robô só abre compra ou venda quando o sinal supera os custos e tem validação temporal positiva. Sem vantagem demonstrada, aguarda. Cada posição usa 25% do saldo, com saída prevista em 5 minutos ou antes pelos limites de risco. Nenhuma ordem real é enviada.</p></div><form class="controls" method="post"><button class="button primary" type="submit">Avaliar agora</button></form></section>
+<section class="hero"><div><h2>Robô simulado de compra e venda</h2><p>A cada intervalo, o sistema usa a previsão atual dos 50 indicadores em tempo real. Se der alta, compra; se der baixa, vende; se ficar lateral, faz um scalp simulado de +0,05% ou -0,05% conforme o lado mais forte das probabilidades. O teste no passado entra apenas como validação da estratégia. Nenhuma ordem real é enviada.</p></div><form class="controls" method="post"><select name="interval" id="interval"><option value="60" <?= $interval === 60 ? 'selected' : '' ?>>1 minuto</option><option value="300" <?= $interval === 300 ? 'selected' : '' ?>>5 minutos</option></select><button class="button primary" type="submit">Executar agora</button></form></section>
 <div class="notice" id="status"><?= htmlspecialchars($snapshot['message'] ?: 'Monitorando a simulação.', ENT_QUOTES, 'UTF-8') ?></div>
 <section class="cards">
   <div class="card"><span>Saldo inicial</span><b><?= brMoney(LIVE_INITIAL_BALANCE) ?></b></div>
-  <div class="card"><span>Saldo realizado (inclui legado)</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($state['cash']) ?></b></div>
+  <div class="card"><span>Saldo realizado</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($state['cash']) ?></b></div>
   <div class="card"><span>Lucro realizado</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($realized) ?></b></div>
   <div class="card"><span>Lucro aberto</span><b class="<?= $snapshot['unrealized'] >= 0 ? 'up' : 'down' ?>"><?= brMoney($snapshot['unrealized']) ?></b></div>
   <div class="card"><span>Total agora</span><b class="<?= $equityPnl >= 0 ? 'up' : 'down' ?>"><?= brMoney($snapshot['equity']) ?></b></div>
   <div class="card"><span>Posição atual</span><b class="<?= $state['side'] === 'LONG' ? 'up' : ($state['side'] === 'SHORT' ? 'down' : 'flat') ?>"><?= $state['side'] === 'LONG' ? 'Comprado' : ($state['side'] === 'SHORT' ? 'Vendido' : 'Fora') ?></b></div>
   <div class="card"><span>Preço BTC</span><b><?= brMoney((float)$snapshot['price']) ?></b></div>
-  <div class="card"><span>Previsão de mercado</span><b><?= $prediction ? ['Baixa','Lateral','Alta'][(int)$prediction['label']] : '--' ?></b></div>
+  <div class="card"><span>Previsão</span><b><?= $prediction ? ['Baixa','Lateral','Alta'][(int)$prediction['label']] : '--' ?></b></div>
   <div class="card"><span>Horizonte</span><b><?= LIVE_HORIZON_MINUTES ?> min</b></div>
   <div class="card"><span>Atualização</span><b data-cron-countdown>1 min</b></div>
 </section>
-<section class="cards" aria-label="Qualidade do sinal">
-  <div class="card"><span>Decisão do robô</span><b><?= ['Vender','Aguardar','Comprar'][$snapshot['decision']['label']] ?></b><small><?= htmlspecialchars($snapshot['decision']['reason'], ENT_QUOTES, 'UTF-8') ?></small></div>
-  <div class="card"><span>Acerto de alta / baixa</span><b><?= $snapshot['metrics'] && $snapshot['metrics']['directionAccuracy'] !== null ? number_format($snapshot['metrics']['directionAccuracy']*100,1,',','.') . '%' : '--' ?></b><small><?= (int)($snapshot['metrics']['directional'] ?? 0) ?> sinais avaliados; acerto não equivale a lucro</small></div>
-  <div class="card"><span>Evidências após custos</span><b><?= (int)$snapshot['evidence']['count'] ?> / <?= (int)$snapshot['policy']['minEvidence'] ?></b><small><?= $snapshot['evidence']['approved'] ? 'Critério temporal atendido' : 'Ainda sem vantagem comprovada' ?></small></div>
-  <div class="card"><span>Custos por ciclo simulado</span><b><?= brPct(tradeRoundTripCost()) ?></b><small>Taxa <?= brPct($snapshot['policy']['feePct']) ?> + slippage <?= brPct($snapshot['policy']['slippagePct']) ?> por lado, sobre o valor da posição</small></div>
-  <div class="card"><span>Qualidade da coleta</span><b><?= $snapshot['fresh'] ? 'Recente' : 'Desatualizada' ?></b><small><?= $snapshot['latest'] ? brDateTime((int)$snapshot['latest']['time']) : 'Sem dados' ?> · <?= (int)$backtestData['records'] ?> registros</small></div>
-</section>
-<div class="notice">Limite de perda: <?= brPct(-$snapshot['policy']['stopPct']) ?>; realização: <?= brPct($snapshot['policy']['takePct']) ?> sobre a posição. Saídas usam a próxima coleta disponível e podem ultrapassar o limite em saltos de preço. Custos são estimativas configuradas, provisionadas no lucro aberto e descontadas ao fechar. Venda representa uma posição SHORT sintética, sem alavancagem; não inclui funding ou empréstimo. Ordens antigas preservam os resultados e custos da versão original. O monitoramento depende do cron ou de uma tela aberta.</div>
-<section><div class="section-head"><div><h3>Simulação com teste no passado</h3><small><?= (int)$backtest['source_tests'] ?> previsões em períodos não sobrepostos; mesma política de entrada e saída, usando somente evidências já concluídas. A execução contínua pode ocorrer em outros instantes.</small></div><span class="badge">backtest <?= LIVE_HORIZON_MINUTES ?> min</span></div>
+<section><div class="section-head"><div><h3>Simulação com teste no passado</h3><small><?= (int)$backtest['source_tests'] ?> previsões retrospectivas da Super Previsão; sinais laterais ficam sem operação.</small></div><span class="badge">backtest <?= LIVE_HORIZON_MINUTES ?> min</span></div>
 <div class="cards">
   <div class="card"><span>Saldo inicial</span><b><?= brMoney((float)$backtest['initial']) ?></b></div>
   <div class="card"><span>Saldo final</span><b class="<?= $backtest['pnl'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$backtest['balance']) ?></b></div>
   <div class="card"><span>Lucro/prejuízo</span><b class="<?= $backtest['pnl'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$backtest['pnl']) ?></b></div>
   <div class="card"><span>Retorno</span><b class="<?= $backtest['return_pct'] >= 0 ? 'up' : 'down' ?>"><?= brPct((float)$backtest['return_pct']) ?></b></div>
-  <div class="card"><span>Operações</span><b><?= (int)$backtest['trades'] ?></b><small><?= (int)$backtest['skipped'] ?> sinais sem entrada</small></div>
+  <div class="card"><span>Operações</span><b><?= (int)$backtest['trades'] ?></b><small><?= (int)$backtest['skipped'] ?> laterais ignoradas</small></div>
 </div>
-<div class="table-scroll"><table><thead><tr><th>Previsão em</th><th>Fechamento</th><th>Ordem</th><th>BTC no período</th><th>Resultado líquido</th><th>Lucro/prejuízo</th><th>Saldo após</th><th>Direção prevista</th></tr></thead><tbody>
+<div class="table-scroll"><table><thead><tr><th>Previsão em</th><th>Fechamento</th><th>Ordem</th><th>BTC no período</th><th>Resultado trade</th><th>Lucro/prejuízo</th><th>Saldo após</th><th>Acerto</th></tr></thead><tbody>
 <?php foreach (array_slice($backtest['orders'], 0, 80) as $row): ?>
 <tr><td><?= brDateTime((int)$row['time']) ?></td><td><?= brDateTime((int)$row['end']) ?></td><td class="<?= $row['side'] === 'Compra' ? 'up' : 'down' ?>"><?= htmlspecialchars((string)$row['side'], ENT_QUOTES, 'UTF-8') ?></td><td><?= brPct((float)$row['btc_return']) ?></td><td class="<?= $row['trade_return'] >= 0 ? 'up' : 'down' ?>"><?= brPct((float)$row['trade_return']) ?></td><td class="<?= $row['pnl'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$row['pnl']) ?></td><td><?= brMoney((float)$row['balance_after']) ?></td><td class="<?= $row['correct'] ? 'up' : 'down' ?>"><?= $row['correct'] ? 'Acerto' : 'Erro' ?></td></tr>
 <?php endforeach; ?>
-<?php if (!$backtest['orders']): ?><tr><td colspan="8">Nenhuma entrada passou pelos filtros de custo e validação neste período. Ficar fora não comprova precisão ou rentabilidade.</td></tr><?php endif; ?>
+<?php if (!$backtest['orders']): ?><tr><td colspan="8">Sem sinais de alta ou baixa no teste passado deste horizonte.</td></tr><?php endif; ?>
 </tbody></table></div></section>
-<section><div class="section-head"><h3>Ordens executadas</h3><span class="badge">run <?= htmlspecialchars((string)$snapshot['run_id'], ENT_QUOTES, 'UTF-8') ?></span></div><div class="table-scroll"><table><thead><tr><th>Hora</th><th>Ordem</th><th>Preço</th><th>Posição após</th><th>Saldo</th><th>Lucro realizado</th><th>Lucro aberto</th><th>Previsão de entrada</th><th>Motivo / versão</th></tr></thead><tbody>
+<section><div class="section-head"><h3>Ordens executadas</h3><span class="badge">run <?= htmlspecialchars((string)$snapshot['run_id'], ENT_QUOTES, 'UTF-8') ?></span></div><div class="table-scroll"><table><thead><tr><th>Hora</th><th>Ordem</th><th>Preço</th><th>Posição após</th><th>Saldo</th><th>Lucro realizado</th><th>Lucro aberto</th><th>Previsão</th></tr></thead><tbody>
 <?php foreach ($orders as $row): ?>
   <?php $event = (string)$row['event_type']; $side = (string)$row['position_side']; ?>
-  <tr><td><?= date('d/m H:i:s', strtotime((string)$row['created_at'])) ?></td><td class="<?= strpos($event, 'LONG') !== false ? 'up' : (strpos($event, 'SHORT') !== false ? 'down' : 'flat') ?>"><?= htmlspecialchars(str_replace(['OPEN_', 'CLOSE_', 'LONG', 'SHORT'], ['Abrir ', 'Fechar ', 'compra', 'venda'], $event), ENT_QUOTES, 'UTF-8') ?></td><td><?= brMoney((float)$row['exit_price']) ?></td><td class="<?= $side === 'LONG' ? 'up' : ($side === 'SHORT' ? 'down' : 'flat') ?>"><?= $side === 'LONG' ? 'Comprado' : ($side === 'SHORT' ? 'Vendido' : 'Fora') ?></td><td><?= brMoney((float)$row['cash_balance']) ?></td><td class="<?= (float)$row['pnl_usd'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$row['pnl_usd']) ?></td><td class="<?= (float)$row['unrealized_pnl_usd'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$row['unrealized_pnl_usd']) ?></td><td><?= ['Baixa','Lateral','Alta'][(int)$row['predicted_label']] ?></td><td><?= htmlspecialchars(($row['model_version'] ?? 'Legado') . ' / ' . ($row['notes'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td></tr>
+  <tr><td><?= date('d/m H:i:s', strtotime((string)$row['created_at'])) ?></td><td class="<?= strpos($event, 'LONG') !== false ? 'up' : (strpos($event, 'SHORT') !== false ? 'down' : 'flat') ?>"><?= htmlspecialchars(str_replace(['OPEN_', 'CLOSE_', 'LONG', 'SHORT'], ['Abrir ', 'Fechar ', 'compra', 'venda'], $event), ENT_QUOTES, 'UTF-8') ?></td><td><?= brMoney((float)$row['exit_price']) ?></td><td class="<?= $side === 'LONG' ? 'up' : ($side === 'SHORT' ? 'down' : 'flat') ?>"><?= $side === 'LONG' ? 'Comprado' : ($side === 'SHORT' ? 'Vendido' : 'Fora') ?></td><td><?= brMoney((float)$row['cash_balance']) ?></td><td class="<?= (float)$row['pnl_usd'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$row['pnl_usd']) ?></td><td class="<?= (float)$row['unrealized_pnl_usd'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$row['unrealized_pnl_usd']) ?></td><td><?= ['Baixa','Lateral','Alta'][(int)$row['predicted_label']] ?></td></tr>
 <?php endforeach; ?>
 </tbody></table></div></section>
 </main>
