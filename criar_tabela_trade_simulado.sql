@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS trade_simulado (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     run_id VARCHAR(32) NOT NULL,
+    strategy_lane VARCHAR(16) NOT NULL DEFAULT 'LEGACY',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     strategy_minutes INT NOT NULL,
     threshold_pct DECIMAL(8, 4) NOT NULL,
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS trade_simulado (
     notes VARCHAR(255) NULL,
     PRIMARY KEY (id),
     KEY idx_run_id (run_id),
+    KEY idx_strategy_lane (strategy_lane),
     KEY idx_entry_time (entry_time),
     KEY idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

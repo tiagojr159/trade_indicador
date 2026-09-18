@@ -21,8 +21,9 @@ if (($_GET['format'] ?? '') === 'json') {
 $prediction = $snapshot['prediction'];
 $state = $snapshot['state'];
 $orders = $snapshot['orders'];
-$realized = $state['cash'] - LIVE_INITIAL_BALANCE;
-$equityPnl = $snapshot['equity'] - LIVE_INITIAL_BALANCE;
+$totalInitial = LIVE_INITIAL_BALANCE * count(LIVE_LANES);
+$realized = $state['cash'] - $totalInitial;
+$equityPnl = $snapshot['equity'] - $totalInitial;
 $backtestData = spData(LIVE_HORIZON_MINUTES, LIVE_THRESHOLD);
 $backtest = tsBacktest($backtestData);
 ?>
@@ -44,8 +45,8 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 <section class="hero"><div><h2>Robô simulado de compra e venda</h2><p>Os 50 indicadores alimentam o mesmo motor da Super Previsão. O robô só abre compra ou venda quando o sinal supera os custos e tem validação temporal positiva. Sem vantagem demonstrada, aguarda. Cada posição usa 25% do saldo, com saída prevista em 5 minutos ou antes pelos limites de risco. Nenhuma ordem real é enviada.</p></div><form class="controls" method="post"><button class="button primary" type="submit">Avaliar agora</button></form></section>
 <div class="notice" id="status"><?= htmlspecialchars($snapshot['message'] ?: 'Monitorando a simulação.', ENT_QUOTES, 'UTF-8') ?></div>
 <section class="cards">
-  <div class="card"><span>Saldo inicial</span><b><?= brMoney(LIVE_INITIAL_BALANCE) ?></b></div>
-  <div class="card"><span>Saldo realizado (inclui legado)</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($state['cash']) ?></b></div>
+  <div class="card"><span>Saldo inicial total</span><b><?= brMoney($totalInitial) ?></b><small><?= brMoney(LIVE_INITIAL_BALANCE) ?> por frente</small></div>
+  <div class="card"><span>Saldo realizado total</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($state['cash']) ?></b></div>
   <div class="card"><span>Lucro realizado</span><b class="<?= $realized >= 0 ? 'up' : 'down' ?>"><?= brMoney($realized) ?></b></div>
   <div class="card"><span>Lucro aberto</span><b class="<?= $snapshot['unrealized'] >= 0 ? 'up' : 'down' ?>"><?= brMoney($snapshot['unrealized']) ?></b></div>
   <div class="card"><span>Total agora</span><b class="<?= $equityPnl >= 0 ? 'up' : 'down' ?>"><?= brMoney($snapshot['equity']) ?></b></div>
@@ -54,6 +55,13 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
   <div class="card"><span>Previsão de mercado</span><b><?= $prediction ? ['Baixa','Lateral','Alta'][(int)$prediction['label']] : '--' ?></b></div>
   <div class="card"><span>Horizonte</span><b><?= LIVE_HORIZON_MINUTES ?> min</b></div>
   <div class="card"><span>Atualização</span><b data-cron-countdown>1 min</b></div>
+</section>
+<section class="cards" aria-label="Frentes do hedge">
+<?php foreach ($state['lanes'] as $laneName => $lane): ?>
+  <?php $laneLabel = $laneName === 'LONG_ONLY' ? 'Frente comprada' : 'Frente vendida'; ?>
+  <div class="card"><span><?= $laneLabel ?></span><b class="<?= $lane['side'] === 'LONG' ? 'up' : ($lane['side'] === 'SHORT' ? 'down' : 'flat') ?>"><?= $lane['side'] === 'LONG' ? 'Comprado' : ($lane['side'] === 'SHORT' ? 'Vendido' : 'Fora') ?></b><small><?= brMoney((float)$lane['cash']) ?> realizado</small></div>
+  <div class="card"><span><?= $laneLabel ?> aberto</span><b class="<?= $lane['unrealized'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$lane['unrealized']) ?></b><small>Total <?= brMoney((float)$lane['equity']) ?></small></div>
+<?php endforeach; ?>
 </section>
 <section class="cards" aria-label="Qualidade do sinal">
   <div class="card"><span>Decisão do robô</span><b><?= ['Vender','Aguardar','Comprar'][$snapshot['decision']['label']] ?></b><small><?= htmlspecialchars($snapshot['decision']['reason'], ENT_QUOTES, 'UTF-8') ?></small></div>

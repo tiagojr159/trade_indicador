@@ -6,6 +6,7 @@ require_once __DIR__ . '/trade_signal_state.php';
 const LIVE_INITIAL_BALANCE = 100.0;
 const LIVE_THRESHOLD = .1;
 const LIVE_HORIZON_MINUTES = 5;
+const LIVE_LANES = ['LONG_ONLY' => 'LONG', 'SHORT_ONLY' => 'SHORT'];
 
 function tsPdo(): PDO
 {
@@ -18,6 +19,7 @@ function tsPdo(): PDO
         'equity_after' => 'DECIMAL(20,8) NOT NULL DEFAULT 100', 'unrealized_pnl_usd' => 'DECIMAL(20,8) NOT NULL DEFAULT 0',
         'model_version' => 'VARCHAR(32) NULL', 'cost_pct' => 'DECIMAL(8,4) NOT NULL DEFAULT 0',
         'fees_usd' => 'DECIMAL(20,8) NOT NULL DEFAULT 0',
+        'strategy_lane' => "VARCHAR(16) NOT NULL DEFAULT 'LEGACY'",
     ];
     $existing = array_column($pdo->query('SHOW COLUMNS FROM trade_simulado')->fetchAll(), 'Field');
     foreach ($columns as $name => $definition) {
@@ -35,16 +37,16 @@ function tsLiveRunId(PDO $pdo): string
     return $row ? $row['run_id'] : 'live_' . date('Ymd');
 }
 
-function tsLastState(PDO $pdo, string $runId): array
+function tsLastState(PDO $pdo, string $runId, string $lane = 'LEGACY'): array
 {
-    $stmt = $pdo->prepare('SELECT * FROM trade_simulado WHERE is_live=1 AND run_id=? ORDER BY id DESC LIMIT 1');
-    $stmt->execute([$runId]);
+    $stmt = $pdo->prepare('SELECT * FROM trade_simulado WHERE is_live=1 AND run_id=? AND strategy_lane=? ORDER BY id DESC LIMIT 1');
+    $stmt->execute([$runId, $lane]);
     $last = $stmt->fetch();
     return ['side' => $last['position_side'] ?? 'FLAT',
         'entry' => isset($last['position_entry_price']) ? (float)$last['position_entry_price'] : null,
         'qty' => (float)($last['position_qty'] ?? 0), 'cash' => (float)($last['cash_balance'] ?? LIVE_INITIAL_BALANCE),
         'entry_ts' => $last ? strtotime($last['entry_time']) : 0,
-        'cost_pct' => (float)($last['cost_pct'] ?? 0), 'origin' => $last ?: null];
+        'cost_pct' => (float)($last['cost_pct'] ?? 0), 'lane' => $lane, 'origin' => $last ?: null];
 }
 
 function tsUnrealized(array $state, float $price): float
@@ -65,7 +67,7 @@ function tsEvent(string $runId, array $data, array $state, int $time): array
 {
     $p = $data['prediction'];
     $price = (float)$data['latest']['btc'];
-    return ['run_id'=>$runId,'is_live'=>1,'model_version'=>TRADE_MODEL_VERSION,
+    return ['run_id'=>$runId,'is_live'=>1,'model_version'=>TRADE_MODEL_VERSION,'strategy_lane'=>$state['lane'] ?? 'LEGACY',
         'strategy_minutes'=>LIVE_HORIZON_MINUTES,'threshold_pct'=>LIVE_THRESHOLD,'initial_balance'=>LIVE_INITIAL_BALANCE,
         'balance_before'=>$state['cash'],'balance_after'=>$state['cash'],'entry_time'=>date('Y-m-d H:i:s',$time),
         'exit_time'=>date('Y-m-d H:i:s',$time),'entry_price'=>$price,'exit_price'=>$price,
@@ -74,6 +76,52 @@ function tsEvent(string $runId, array $data, array $state, int $time): array
         'probability_up'=>$p['frequencies'][2]??0,'probability_flat'=>$p['frequencies'][1]??0,'probability_down'=>$p['frequencies'][0]??0,
         'position_qty'=>0,'position_entry_price'=>null,'cash_balance'=>$state['cash'],'equity_after'=>$state['cash'],
         'unrealized_pnl_usd'=>0,'cost_pct'=>0,'fees_usd'=>0];
+}
+
+function tsExecuteLane(PDO $pdo, string $runId, string $lane, string $forcedSide, array $data, int $time, float $price, int $intervalSeconds, array $policy): array
+{
+    $state = tsLastState($pdo,$runId,$lane);
+    $origin = $state['origin'];
+    if ($origin && $time <= strtotime($origin['exit_time'])) {
+        return ['executed'=>false,'message'=>$lane.': aguardando nova coleta.'];
+    }
+    if ($state['side'] !== 'FLAT') {
+        $reason = tradeExitReason($state,$price,$time,$policy);
+        if ($reason === null) {
+            return ['executed'=>false,'message'=>$lane.': posição monitorada.'];
+        }
+        $grossReturn = ($price/$state['entry']-1)*100;
+        $netReturn = $grossReturn*($state['side']==='LONG'?1:-1)-$state['cost_pct'];
+        $pnl = tsUnrealized($state,$price);
+        $cash = max(0,$state['cash']+$pnl);
+        $event = tsEvent($runId,$data,$state,$time);
+        foreach (['entry_time','predicted_label','neighbors_count','similarity','probability_up','probability_flat','probability_down','model_version'] as $field) {
+            $event[$field] = $origin[$field];
+        }
+        $event = array_replace($event, ['event_type'=>'CLOSE_'.$state['side'],'side'=>$state['side'],
+            'entry_price'=>$state['entry'],'btc_return_pct'=>$grossReturn,'trade_return_pct'=>$netReturn,
+            'pnl_usd'=>$pnl,'balance_after'=>$cash,'cash_balance'=>$cash,'equity_after'=>$cash,
+            'actual_label'=>spLabel($grossReturn,LIVE_THRESHOLD),
+            'was_correct'=>(int)((int)$origin['predicted_label']===spLabel($grossReturn,LIVE_THRESHOLD)),
+            'position_side'=>'FLAT','notes'=>$reason.' - '.$lane.' - custos liquidados.',
+            'cost_pct'=>$state['cost_pct'],'fees_usd'=>$state['entry']*$state['qty']*$state['cost_pct']/100]);
+        tsInsert($pdo,$event);
+        return ['executed'=>true,'message'=>$lane.': '.$reason.'.'];
+    }
+    if ($origin && $time-strtotime($origin['exit_time']) < $intervalSeconds) {
+        return ['executed'=>false,'message'=>$lane.': aguardando intervalo após fechamento.'];
+    }
+    if ($state['cash']<=0) {
+        return ['executed'=>false,'message'=>$lane.': saldo zerado.'];
+    }
+    $qty = $state['cash']*$policy['allocation']/$price;
+    $cost = tradeRoundTripCost($policy);
+    $estimatedCosts = $qty*$price*$cost/100;
+    tsInsert($pdo,array_replace(tsEvent($runId,$data,$state,$time),[
+        'event_type'=>'OPEN_'.$forcedSide,'side'=>$forcedSide,'position_side'=>$forcedSide,'position_qty'=>$qty,
+        'position_entry_price'=>$price,'cost_pct'=>$cost,'equity_after'=>$state['cash']-$estimatedCosts,
+        'unrealized_pnl_usd'=>-$estimatedCosts,'notes'=>$lane.' sempre '.($forcedSide==='LONG'?'comprado':'vendido').'; 25% do saldo; custos provisionados.']));
+    return ['executed'=>true,'message'=>$lane.': abriu '.($forcedSide==='LONG'?'compra':'venda').'.'];
 }
 
 function tsExecute(PDO $pdo, int $intervalSeconds = 60, ?array $data = null): array
@@ -96,58 +144,14 @@ function tsExecute(PDO $pdo, int $intervalSeconds = 60, ?array $data = null): ar
         $time = (int)$data['latest']['time'];
         $policy = tradePolicy();
         $pdo->beginTransaction();
-        $state = tsLastState($pdo,$runId);
-        $origin = $state['origin'];
-        // Never execute a quote already consumed by an earlier order, even after a page reload.
-        if ($origin && $time <= strtotime($origin['exit_time'])) {
-            $pdo->commit();
-            return ['ok'=>true,'executed'=>false,'message'=>'Aguardando nova coleta.'];
-        }
-        if ($state['side'] !== 'FLAT') {
-            $reason = tradeExitReason($state,$price,$time,$policy);
-            if ($reason === null) {
-                $pdo->commit();
-                return ['ok'=>true,'executed'=>false,'message'=>'Posição monitorada até o limite de risco ou horizonte.'];
-            }
-            $grossReturn = ($price/$state['entry']-1)*100;
-            $netReturn = $grossReturn*($state['side']==='LONG'?1:-1)-$state['cost_pct'];
-            $pnl = tsUnrealized($state,$price);
-            $cash = max(0,$state['cash']+$pnl);
-            $event = tsEvent($runId,$data,$state,$time);
-            // Keep the prediction, timestamp and frequencies that actually opened the position.
-            foreach (['entry_time','predicted_label','neighbors_count','similarity','probability_up','probability_flat','probability_down','model_version'] as $field) {
-                $event[$field] = $origin[$field];
-            }
-            $event = array_replace($event, ['event_type'=>'CLOSE_'.$state['side'],'side'=>$state['side'],
-                'entry_price'=>$state['entry'],'btc_return_pct'=>$grossReturn,'trade_return_pct'=>$netReturn,
-                'pnl_usd'=>$pnl,'balance_after'=>$cash,'cash_balance'=>$cash,'equity_after'=>$cash,
-                'actual_label'=>spLabel($grossReturn,LIVE_THRESHOLD),
-                'was_correct'=>(int)((int)$origin['predicted_label']===spLabel($grossReturn,LIVE_THRESHOLD)),
-                'position_side'=>'FLAT','notes'=>$reason.($state['cost_pct']>0?' · custos incluídos.':' · posição legada sem custos.'),
-                'cost_pct'=>$state['cost_pct'],'fees_usd'=>$state['entry']*$state['qty']*$state['cost_pct']/100]);
-            tsInsert($pdo,$event);
-            $pdo->commit();
-            return ['ok'=>true,'executed'=>true,'message'=>$reason.'. Resultado líquido registrado.'];
-        }
         $intervalSeconds = in_array($intervalSeconds,[60,300],true)?$intervalSeconds:60;
-        if ($origin && $time-strtotime($origin['exit_time']) < $intervalSeconds) {
-            $pdo->commit();
-            return ['ok'=>true,'executed'=>false,'message'=>'Aguardando intervalo após fechamento.'];
+        $results = [];
+        foreach (LIVE_LANES as $lane => $side) {
+            $results[] = tsExecuteLane($pdo,$runId,$lane,$side,$data,$time,$price,$intervalSeconds,$policy);
         }
-        if ($decision['label']===1 || $state['cash']<=0) {
-            $pdo->commit();
-            return ['ok'=>true,'executed'=>false,'message'=>$decision['reason']];
-        }
-        $side = $decision['label']===2?'LONG':'SHORT';
-        $qty = $state['cash']*$policy['allocation']/$price;
-        $cost = tradeRoundTripCost($policy);
-        $estimatedCosts = $qty*$price*$cost/100;
-        tsInsert($pdo,array_replace(tsEvent($runId,$data,$state,$time),[
-            'event_type'=>'OPEN_'.$side,'side'=>$side,'position_side'=>$side,'position_qty'=>$qty,
-            'position_entry_price'=>$price,'cost_pct'=>$cost,'equity_after'=>$state['cash']-$estimatedCosts,
-            'unrealized_pnl_usd'=>-$estimatedCosts,'notes'=>'Sinal validado; 25% do saldo; custos provisionados e liquidados no fechamento.']));
         $pdo->commit();
-        return ['ok'=>true,'executed'=>true,'message'=>'Posição simulada aberta com controle de risco.'];
+        return ['ok'=>true,'executed'=>in_array(true,array_column($results,'executed'),true),
+            'message'=>implode(' ',array_column($results,'message'))];
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $error;
@@ -157,13 +161,22 @@ function tsExecute(PDO $pdo, int $intervalSeconds = 60, ?array $data = null): ar
 function tsSnapshot(PDO $pdo, string $runId, string $message = ''): array
 {
     $data=spData(LIVE_HORIZON_MINUTES,LIVE_THRESHOLD);
-    $state=tsLastState($pdo,$runId);
     $price=(float)($data['latest']['btc']??0);
-    $unrealized=$price>0?tsUnrealized($state,$price):0;
+    $states=[];$cash=0.0;$unrealized=0.0;$openSide='FLAT';
+    foreach (LIVE_LANES as $lane => $side) {
+        $states[$lane]=tsLastState($pdo,$runId,$lane);
+        $cash+=$states[$lane]['cash'];
+        $laneUnrealized=$price>0?tsUnrealized($states[$lane],$price):0;
+        $states[$lane]['unrealized']=$laneUnrealized;
+        $states[$lane]['equity']=$states[$lane]['cash']+$laneUnrealized;
+        $unrealized+=$laneUnrealized;
+        if ($states[$lane]['side'] !== 'FLAT') $openSide = $openSide === 'FLAT' ? $states[$lane]['side'] : 'HEDGE';
+    }
+    $state=['side'=>$openSide,'cash'=>$cash,'lanes'=>$states];
     $stmt=$pdo->prepare('SELECT * FROM trade_simulado WHERE is_live=1 AND run_id=? ORDER BY id DESC LIMIT 80');
     $stmt->execute([$runId]);
     return ['run_id'=>$runId,'message'=>$message?:$data['decision']['reason'],'price'=>$price,'state'=>$state,
-        'unrealized'=>$unrealized,'equity'=>$state['cash']+$unrealized,'prediction'=>$data['prediction'],
+        'unrealized'=>$unrealized,'equity'=>$cash+$unrealized,'prediction'=>$data['prediction'],
         'decision'=>$data['decision'],'evidence'=>$data['evidence'],'fresh'=>$data['fresh'],'policy'=>$data['policy'],
         'metrics'=>$data['metrics'],'latest'=>$data['latest'],'orders'=>$stmt->fetchAll()];
 }
