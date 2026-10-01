@@ -6,7 +6,7 @@ require_once __DIR__ . '/trade_signal_state.php';
 const LIVE_INITIAL_BALANCE = 100.0;
 const LIVE_THRESHOLD = .1;
 const LIVE_HORIZON_MINUTES = 5;
-// Kept for old ledgers and callers. New simulations use the seven accounts below.
+// Kept for old ledgers and callers. Each simulated strategy has its own account.
 const LIVE_LANES = ['LONG_ONLY' => 'LONG', 'SHORT_ONLY' => 'SHORT'];
 const LIVE_STRATEGIES = [
     'adaptive' => ['name' => 'Super Previsão', 'description' => 'Modelo adaptativo com validação histórica após custos.'],
@@ -16,6 +16,11 @@ const LIVE_STRATEGIES = [
     'volume_flow' => ['name' => 'Volume e fluxo', 'description' => 'Usa volume relativo, OBV, MFI, VWAP, fluxo e confirmação de preço com volume.'],
     'graph_confirm' => ['name' => 'Confirmação do gráfico', 'description' => 'Combina média dos indicadores selecionados, inclinação recente e variação recente do BTC.'],
     'block_consensus' => ['name' => 'Consenso dos cinco blocos', 'description' => 'Opera apenas quando ao menos quatro dos cinco grupos de indicadores concordam.'],
+    'spot_grid' => ['name' => 'Grid Spot (faixa)', 'description' => 'Compra BTC quando o preço cai abaixo da média curta e volta ao caixa ao recuperar a faixa. Simulação spot, sem venda a descoberto.', 'market' => 'spot', 'allocation' => .25],
+    'futures_grid' => ['name' => 'Grid Futures (neutro)', 'description' => 'Abre posições sintéticas compradas ou vendidas ao tocar níveis em torno da média curta. Sem alavancagem, funding ou liquidação real.', 'market' => 'futures', 'allocation' => .25],
+    'spot_dca' => ['name' => 'DCA Spot (periódico)', 'description' => 'Faz compras simuladas em intervalos regulares de dez minutos, com o mesmo horizonte e custos do replay. Não envia ordens à Binance.', 'market' => 'spot', 'allocation' => .25],
+    'rebalance' => ['name' => 'Rebalanceamento 50/50', 'description' => 'Aproxima uma carteira de caixa e BTC: compra quando o preço se afasta para baixo da média curta e reduz a exposição ao voltar à faixa.', 'market' => 'spot', 'allocation' => .25],
+    'twap' => ['name' => 'TWAP (5 parcelas)', 'description' => 'Confirma o sentido pelos 50 indicadores e divide a exposição em até cinco parcelas, uma por coleta, para aproximar uma execução escalonada.', 'market' => 'futures', 'allocation' => .25],
 ];
 
 function tsStrategies(): array
@@ -159,6 +164,31 @@ function tsIndicatorMedian(array $row): ?float
     return tsMeanFeatures($row, [13,14,17,20,25,29,31,32,36,41]);
 }
 
+function tsPriceReference(array $history, int $index, int $lookback = 30): ?float
+{
+    if (!isset($history[$index])) return null;
+    $values = [];
+    $start = max(0, $index - $lookback + 1);
+    for ($i = $start; $i <= $index; $i++) {
+        $price = (float)($history[$i]['btc'] ?? 0);
+        if ($price > 0) $values[] = $price;
+    }
+    return count($values) >= min(5, $lookback) ? array_sum($values) / count($values) : null;
+}
+
+function tsPriceDeviationPct(array $history, int $index, int $lookback = 30): ?float
+{
+    $reference = tsPriceReference($history, $index, $lookback);
+    $price = (float)($history[$index]['btc'] ?? 0);
+    return $reference && $price > 0 ? ($price / $reference - 1) * 100 : null;
+}
+
+function tsTwapSliceCount(?array $row): int
+{
+    if (!$row || !preg_match('/TWAP_SLICE=(\d+)/', (string)($row['notes'] ?? ''), $match)) return 0;
+    return max(0, min(5, (int)$match[1]));
+}
+
 function tsClamp(float $value, float $min, float $max): float
 {
     return max($min, min($max, $value));
@@ -237,6 +267,48 @@ function tsStrategySignal(string $strategyKey, array $history, int $index, array
         if ($down>=4 && $average<=-.25) return ['label'=>0,'reason'=>'Ao menos quatro dos cinco blocos apontam baixa.'];
         return ['label'=>1,'reason'=>'Os cinco blocos ainda divergem.'];
     }
+
+    if ($strategyKey === 'spot_grid') {
+        $deviation = tsPriceDeviationPct($history, $index);
+        if ($deviation === null) return ['label'=>1,'reason'=>'Aguardando faixa de preço suficiente para o grid spot.'];
+        if ($deviation <= -.35) return ['label'=>2,'reason'=>'Preço cruzou o nível inferior do grid spot; compra simulada.'];
+        if ($deviation >= -.05) return ['label'=>0,'reason'=>'Preço voltou à faixa do grid spot; reduz exposição comprada.'];
+        return ['label'=>1,'reason'=>'Preço dentro da faixa; grid spot aguarda outro nível.'];
+    }
+
+    if ($strategyKey === 'futures_grid') {
+        $deviation = tsPriceDeviationPct($history, $index);
+        if ($deviation === null) return ['label'=>1,'reason'=>'Aguardando faixa de preço suficiente para o grid futures.'];
+        if ($deviation <= -.40) return ['label'=>2,'reason'=>'Preço atingiu nível inferior do grid; compra sintética.'];
+        if ($deviation >= .40) return ['label'=>0,'reason'=>'Preço atingiu nível superior do grid; venda sintética.'];
+        return ['label'=>1,'reason'=>'Preço dentro dos níveis do grid futures.'];
+    }
+
+    if ($strategyKey === 'spot_dca') {
+        if ($index < 1) return ['label'=>1,'reason'=>'Aguardando próxima coleta para o DCA periódico.'];
+        $previous = (int)($history[$index - 1]['time'] ?? 0);
+        $current = (int)$row['time'];
+        if ($previous > 0 && $current - $previous <= 120 && intdiv($current, 600) > intdiv($previous, 600)) {
+            return ['label'=>2,'reason'=>'Janela de dez minutos do DCA; compra spot simulada.'];
+        }
+        return ['label'=>1,'reason'=>'DCA aguardando a próxima janela de compra.'];
+    }
+
+    if ($strategyKey === 'rebalance') {
+        $deviation = tsPriceDeviationPct($history, $index, 60);
+        if ($deviation === null) return ['label'=>1,'reason'=>'Aguardando dados para estimar a faixa de rebalanceamento.'];
+        if ($deviation <= -.60) return ['label'=>2,'reason'=>'BTC abaixo da faixa 50/50 estimada; rebalanceamento compra.'];
+        if ($deviation >= -.10) return ['label'=>0,'reason'=>'BTC voltou à faixa-alvo estimada; rebalanceamento reduz BTC.'];
+        return ['label'=>1,'reason'=>'Carteira simulada dentro da faixa de rebalanceamento.'];
+    }
+
+    if ($strategyKey === 'twap') {
+        $score = tsMeanFeatures($row, range(0, 49));
+        if ($score === null || abs($score) < .45) return ['label'=>1,'reason'=>'TWAP aguardando direção suficiente nos indicadores.'];
+        return $score > 0
+            ? ['label'=>2,'reason'=>'TWAP confirmado para compra; executa parcelas a cada coleta.']
+            : ['label'=>0,'reason'=>'TWAP confirmado para venda; executa parcelas a cada coleta.'];
+    }
     return $flat;
 }
 
@@ -246,6 +318,26 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
     if ($origin && $time<=strtotime($origin['exit_time'])) return ['executed'=>false,'message'=>$strategyKey.': aguardando nova coleta.'];
     if ($state['side']!=='FLAT') {
         $reason=tradeExitReason($state,$price,$time,$policy);
+        if ($reason===null && $strategyKey==='twap') {
+            $slices=tsTwapSliceCount($origin);
+            $targetSide=$label===2?'LONG':($label===0?'SHORT':'FLAT');
+            if ($slices<5 && $targetSide===$state['side'] && $time-strtotime($origin['exit_time']) >= $intervalSeconds) {
+                $sliceQty=$state['cash']*($policy['allocation']/5)/$price;
+                if ($sliceQty>0) {
+                    $qty=$state['qty']+$sliceQty;
+                    $average=($state['entry']*$state['qty']+$price*$sliceQty)/$qty;
+                    $event=tsEvent($runId,$data,$state,$time,$label);
+                    foreach (['entry_time','predicted_label','neighbors_count','similarity','probability_up','probability_flat','probability_down','model_version'] as $field) $event[$field]=$origin[$field];
+                    tsInsert($pdo,array_replace($event,['event_type'=>'ADD_'.$state['side'],'side'=>$state['side'],
+                        'entry_time'=>$origin['entry_time'],'exit_time'=>date('Y-m-d H:i:s',$time),
+                        'position_side'=>$state['side'],'position_qty'=>$qty,'position_entry_price'=>$average,
+                        'cost_pct'=>$state['cost_pct'],'equity_after'=>$state['cash']-$average*$qty*$state['cost_pct']/100,
+                        'unrealized_pnl_usd'=>-$average*$qty*$state['cost_pct']/100,
+                        'notes'=>'TWAP_SLICE='.($slices+1).'; parcela '.($slices+1).' de 5.']));
+                    return ['executed'=>true,'message'=>$strategyKey.': executou parcela '.($slices+1).' de 5.'];
+                }
+            }
+        }
         if ($reason===null && (($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2))) $reason='Sinal contrÃ¡rio';
         if ($reason===null) return ['executed'=>false,'message'=>$strategyKey.': posiÃ§Ã£o monitorada.'];
         $grossReturn=($price/$state['entry']-1)*100;
@@ -266,13 +358,16 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
     if ($origin && $time-strtotime($origin['exit_time'])<$intervalSeconds) return ['executed'=>false,'message'=>$strategyKey.': aguardando intervalo apÃ³s fechamento.'];
     if ($state['cash']<=0) return ['executed'=>false,'message'=>$strategyKey.': saldo zerado.'];
     if (!in_array($label,[0,2],true)) return ['executed'=>false,'message'=>$strategyKey.': '.$signal['reason']];
-    $side=$label===2?'LONG':'SHORT';$qty=$state['cash']*$policy['allocation']/$price;
+    $strategy=LIVE_STRATEGIES[$strategyKey];
+    if (($strategy['market']??'futures')==='spot' && $label===0) return ['executed'=>false,'message'=>$strategyKey.': mercado spot simulado aguarda compra, sem abrir venda a descoberto.'];
+    $allocation=(float)($strategyKey==='twap' ? $policy['allocation']/5 : ($strategy['allocation']??$policy['allocation']));
+    $side=$label===2?'LONG':'SHORT';$qty=$state['cash']*$allocation/$price;
     $cost=tradeRoundTripCost($policy);$estimatedCosts=$qty*$price*$cost/100;
     $event=tsEvent($runId,$data,$state,$time,$label);
     tsInsert($pdo,array_replace($event,['event_type'=>'OPEN_'.$side,'side'=>$side,'position_side'=>$side,
         'position_qty'=>$qty,'position_entry_price'=>$price,'cost_pct'=>$cost,
         'equity_after'=>$state['cash']-$estimatedCosts,'unrealized_pnl_usd'=>-$estimatedCosts,
-        'notes'=>$signal['reason'].'; 25% do saldo; custos provisionados.']));
+        'notes'=>($strategyKey==='twap'?'TWAP_SLICE=1; ':'').$signal['reason'].'; '.number_format($allocation*100,0,',','.').'% do saldo; custos provisionados.']));
     return ['executed'=>true,'message'=>$strategyKey.': abriu '.($side==='LONG'?'compra':'venda').'.'];
 }
 
@@ -305,6 +400,36 @@ function tsExecute(PDO $pdo, int $intervalSeconds = 60, ?array $data = null): ar
     } finally { flock($lock,LOCK_UN);fclose($lock); }
 }
 
+function tsTwapReplayOutcome(array $history, array $sample, int $label, ?array $policy = null): ?array
+{
+    $policy=$policy??tradePolicy();$side=$label===2?'LONG':'SHORT';$entryPrices=[];$lastPrice=null;$lastTime=(int)$sample['time'];
+    foreach ($history as $index=>$row) {
+        $time=(int)$row['time'];
+        if ($time<(int)$sample['time'] || $time>(int)$sample['end']) continue;
+        $price=(float)$row['btc'];
+        if (!$entryPrices) $entryPrices[]=$price;
+        elseif (count($entryPrices)<5) {
+            $signal=(int)tsStrategySignal('twap',$history,$index)['label'];
+            if ($signal===$label) $entryPrices[]=$price;
+        }
+        $lastPrice=$price;$lastTime=$time;
+        $average=array_sum($entryPrices)/count($entryPrices);
+        $state=['side'=>$side,'entry'=>$average,'entry_ts'=>(int)$sample['time']];
+        $reason=tradeExitReason($state,$price,$time,$policy);
+        $signal=(int)tsStrategySignal('twap',$history,$index)['label'];
+        if ($reason===null && (($side==='LONG' && $signal===0) || ($side==='SHORT' && $signal===2))) $reason='Sinal contrario';
+        if ($reason!==null) break;
+    }
+    if (!$entryPrices || !$lastPrice) return null;
+    $direction=$side==='LONG'?1:-1;$returns=[];
+    foreach ($entryPrices as $entryPrice) if ($entryPrice>0) $returns[]=($lastPrice/$entryPrice-1)*100*$direction;
+    if (!$returns) return null;
+    $gross=($lastPrice/(array_sum($entryPrices)/count($entryPrices))-1)*100;
+    $net=array_sum($returns)/count($returns)-tradeRoundTripCost($policy);
+    return ['end'=>$lastTime,'return'=>$gross,'net'=>$net,'allocation'=>$policy['allocation']*count($returns)/5,
+        'reason'=>$reason??'Horizonte TWAP concluido; parcelas avaliadas pelo preco medio.'];
+}
+
 function tsBacktestStrategy(string $strategyKey, array $data): array
 {
     $history=$data['history']??[];$balance=LIVE_INITIAL_BALANCE;$orders=[];$wins=$losses=$skipped=0;$peak=$balance;$drawdown=0.0;$gain=$loss=0.0;
@@ -323,8 +448,14 @@ function tsBacktestStrategy(string $strategyKey, array $data): array
         if($index===null){$skipped++;continue;}
         $signal=tsStrategySignal($strategyKey,$history,$index,$data,$adaptiveSignals);$label=(int)$signal['label'];
         if(!in_array($label,[0,2],true)){$skipped++;continue;}
-        $outcome=tradeReplayOutcome($history,$sample,$label);$before=$balance;
-        $pnl=$before*tradePolicy()['allocation']*(float)$outcome['net']/100;
+        if((LIVE_STRATEGIES[$strategyKey]['market']??'futures')==='spot' && $label===0){$skipped++;continue;}
+        $outcome=$strategyKey==='twap'
+            ? tsTwapReplayOutcome($history,$sample,$label,tradePolicy())
+            : tradeReplayOutcome($history,$sample,$label);
+        if(!$outcome){$skipped++;continue;}
+        $before=$balance;
+        $allocation=(float)($outcome['allocation']??($strategyKey==='twap'?tradePolicy()['allocation']: (LIVE_STRATEGIES[$strategyKey]['allocation']??tradePolicy()['allocation'])));
+        $pnl=$before*$allocation*(float)$outcome['net']/100;
         $balance=max(0,$balance+$pnl);$peak=max($peak,$balance);$drawdown=max($drawdown,$peak>0?($peak-$balance)/$peak*100:0);
         $wins+=(int)($pnl>0);$losses+=(int)($pnl<0);$gain+=max(0,$pnl);$loss+=max(0,-$pnl);
         $actual=spLabel((float)$outcome['return'],LIVE_THRESHOLD);

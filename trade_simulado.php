@@ -6,7 +6,13 @@ function brMoney(float $value): string { return '$ ' . number_format($value, 2, 
 function brPct(float $value): string { return ($value > 0 ? '+' : '') . number_format($value, 2, ',', '.') . '%'; }
 function brDateTime(int $time): string { return date('d/m H:i', $time); }
 function tradeSideLabel(string $side): string { return $side === 'LONG' ? 'Comprado' : ($side === 'SHORT' ? 'Vendido' : 'Fora'); }
-function tradeSignalLabel(int $label): string { return $label === 2 ? 'Comprar' : ($label === 0 ? 'Vender' : 'Aguardar'); }
+function tradeActionLabel(int $label): string { return $label === 2 ? 'Comprar' : ($label === 0 ? 'Vender' : 'Aguardar'); }
+function tradeEventLabel(string $event): string
+{
+    if ($event === 'ADD_LONG') return 'Parcela compra';
+    if ($event === 'ADD_SHORT') return 'Parcela venda';
+    return str_replace(['OPEN_','CLOSE_','LONG','SHORT'], ['Abrir ','Fechar ','compra','venda'], $event);
+}
 
 $pdo = tsPdo();
 $runId = tsLiveRunId($pdo);
@@ -55,11 +61,11 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 </head>
 <body>
 <div class="wrap">
-<header class="topbar"><div class="brand"><a class="coin" href="index.php">B</a><div><h1>Trade Simulado</h1><small>Sete estratégias, sete contas independentes</small></div></div><nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Histórico com gráfico</a><a href="graficos_selecionados.php">Gráficos selecionados</a><a href="super_previsao.php">Super Previsão</a><a href="trade_simulado.php" aria-current="page">Trade simulado</a></nav></header>
+<header class="topbar"><div class="brand"><a class="coin" href="index.php">B</a><div><h1>Trade Simulado</h1><small>Doze estratégias, doze contas independentes</small></div></div><nav aria-label="Principal"><a href="index.php">Capa</a><a href="indicadores.php">Indicadores</a><a href="historico_indicadores.php">Histórico com gráfico</a><a href="graficos_selecionados.php">Gráficos selecionados</a><a href="super_previsao.php">Super Previsão</a><a href="trade_simulado.php" aria-current="page">Trade simulado</a></nav></header>
 <main>
-<section class="hero"><div><h2>Comparação de estratégias de compra e venda</h2><p>Cada aba acompanha uma conta virtual iniciada com US$ 100. As estratégias usam sinais diferentes dos 50 indicadores; cada saldo e cada posição ficam separados. A estratégia de retorno à mediana compara a linha do BTC reescalada no gráfico com a média branca dos dez indicadores selecionados. Toda operação continua simulada.</p></div><form method="post"><input type="hidden" name="strategy" value="<?= htmlspecialchars($selected, ENT_QUOTES, 'UTF-8') ?>"><button class="button primary" type="submit">Avaliar agora</button></form></section>
+<section class="hero"><div><h2>Comparação de estratégias de compra e venda</h2><p>Cada aba acompanha uma conta virtual iniciada com US$ 100. As estratégias usam sinais diferentes dos 50 indicadores; cada saldo e cada posição ficam separados. A estratégia de retorno à mediana compara a linha do BTC reescalada no gráfico com a média branca dos dez indicadores selecionados. Além das sete estratégias de indicadores, cinco abas simulam ideias de bots: Grid Spot, Grid Futures sem alavancagem, DCA Spot, rebalanceamento 50/50 e TWAP em cinco parcelas. Cada conta começa com US$ 100. Toda operação continua simulada.</p></div><form method="post"><input type="hidden" name="strategy" value="<?= htmlspecialchars($selected, ENT_QUOTES, 'UTF-8') ?>"><button class="button primary" type="submit">Avaliar agora</button></form></section>
 <div class="notice" id="status"><?= htmlspecialchars($statusMessage, ENT_QUOTES, 'UTF-8') ?> · <?= $snapshot['fresh'] ? 'cotação recente' : 'cotação sem atualização recente; não abre novas posições' ?></div>
-<section class="cards" aria-label="Resumo das sete contas">
+<section class="cards" aria-label="Resumo das contas independentes">
   <div class="card"><span>Saldo inicial total</span><b><?= brMoney($totalInitial) ?></b><small><?= brMoney(LIVE_INITIAL_BALANCE) ?> em cada uma das <?= count($strategies) ?> contas</small></div>
   <div class="card"><span>Saldo realizado total</span><b class="<?= $totalCash >= $totalInitial ? 'up' : 'down' ?>"><?= brMoney($totalCash) ?></b></div>
   <div class="card"><span>Lucro aberto</span><b class="<?= $totalOpen >= 0 ? 'up' : 'down' ?>"><?= brMoney($totalOpen) ?></b></div>
@@ -76,7 +82,7 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
   <div class="card"><span>Saldo realizado</span><b class="<?= $selectedAccount['cash'] >= LIVE_INITIAL_BALANCE ? 'up' : 'down' ?>"><?= brMoney((float)$selectedAccount['cash']) ?></b></div>
   <div class="card"><span>Patrimônio agora</span><b class="<?= $selectedAccount['equity'] >= LIVE_INITIAL_BALANCE ? 'up' : 'down' ?>"><?= brMoney((float)$selectedAccount['equity']) ?></b></div>
   <div class="card"><span>Posição</span><b class="<?= $selectedAccount['side'] === 'LONG' ? 'up' : ($selectedAccount['side'] === 'SHORT' ? 'down' : 'flat') ?>"><?= tradeSideLabel($selectedAccount['side']) ?></b></div>
-  <div class="card"><span>Decisão atual</span><b class="<?= $signal['label'] === 2 ? 'up' : ($signal['label'] === 0 ? 'down' : 'flat') ?>"><?= tradeSignalLabel((int)$signal['label']) ?></b><small><?= htmlspecialchars($signal['reason'], ENT_QUOTES, 'UTF-8') ?></small></div>
+  <div class="card"><span>Decisão atual</span><b class="<?= $signal['label'] === 2 ? 'up' : ($signal['label'] === 0 ? 'down' : 'flat') ?>"><?= tradeActionLabel((int)$signal['label']) ?></b><small><?= htmlspecialchars($signal['reason'], ENT_QUOTES, 'UTF-8') ?></small></div>
   <div class="card"><span>Preço BTC</span><b><?= brMoney((float)$snapshot['price']) ?></b></div>
   <div class="card"><span>Lucro aberto</span><b class="<?= $selectedAccount['unrealized'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$selectedAccount['unrealized']) ?></b></div>
   <div class="card"><span>Resultado no replay</span><b class="<?= $backtests[$selected]['pnl'] >= 0 ? 'up' : 'down' ?>"><?= brMoney((float)$backtests[$selected]['pnl']) ?></b><small>Saldo final <?= brMoney((float)$backtests[$selected]['balance']) ?></small></div>
@@ -103,11 +109,11 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 
 <section><div class="section-head"><div><h3>Registro ao vivo da conta selecionada</h3><small>Run <?= htmlspecialchars((string)$snapshot['run_id'], ENT_QUOTES, 'UTF-8') ?> · cada operação simulada aparece nesta conta</small></div></div><div class="table-scroll"><table><thead><tr><th>Hora</th><th>Ordem</th><th>Preço</th><th>Posição após</th><th>Saldo</th><th>Lucro realizado</th><th>Lucro aberto</th><th>Previsão de entrada</th><th>Motivo</th></tr></thead><tbody>
 <?php foreach ($snapshot['orders'] as $row): $event=(string)$row['event_type'];$side=(string)$row['position_side']; ?>
-<tr><td><?= date('d/m H:i:s',strtotime((string)$row['created_at'])) ?></td><td class="<?= strpos($event,'LONG')!==false?'up':(strpos($event,'SHORT')!==false?'down':'flat') ?>"><?= htmlspecialchars(str_replace(['OPEN_','CLOSE_','LONG','SHORT'],['Abrir ','Fechar ','compra','venda'],$event),ENT_QUOTES,'UTF-8') ?></td><td><?= brMoney((float)$row['exit_price']) ?></td><td class="<?= $side==='LONG'?'up':($side==='SHORT'?'down':'flat') ?>"><?= tradeSideLabel($side) ?></td><td><?= brMoney((float)$row['cash_balance']) ?></td><td class="<?= (float)$row['pnl_usd']>=0?'up':'down' ?>"><?= brMoney((float)$row['pnl_usd']) ?></td><td class="<?= (float)$row['unrealized_pnl_usd']>=0?'up':'down' ?>"><?= brMoney((float)$row['unrealized_pnl_usd']) ?></td><td><?= ['Baixa','Lateral','Alta'][(int)$row['predicted_label']] ?></td><td><?= htmlspecialchars((string)($row['notes']??''),ENT_QUOTES,'UTF-8') ?></td></tr>
+<tr><td><?= date('d/m H:i:s',strtotime((string)$row['created_at'])) ?></td><td class="<?= strpos($event,'LONG')!==false?'up':(strpos($event,'SHORT')!==false?'down':'flat') ?>"><?= htmlspecialchars(tradeEventLabel($event),ENT_QUOTES,'UTF-8') ?></td><td><?= brMoney((float)$row['exit_price']) ?></td><td class="<?= $side==='LONG'?'up':($side==='SHORT'?'down':'flat') ?>"><?= tradeSideLabel($side) ?></td><td><?= brMoney((float)$row['cash_balance']) ?></td><td class="<?= (float)$row['pnl_usd']>=0?'up':'down' ?>"><?= brMoney((float)$row['pnl_usd']) ?></td><td class="<?= (float)$row['unrealized_pnl_usd']>=0?'up':'down' ?>"><?= brMoney((float)$row['unrealized_pnl_usd']) ?></td><td><?= ['Baixa','Lateral','Alta'][(int)$row['predicted_label']] ?></td><td><?= htmlspecialchars((string)($row['notes']??''),ENT_QUOTES,'UTF-8') ?></td></tr>
 <?php endforeach; ?>
 <?php if (!$snapshot['orders']): ?><tr><td colspan="9">Esta conta ainda não registrou operações ao vivo.</td></tr><?php endif; ?>
 </tbody></table></div></section>
-<div class="notice">As sete contas começam com US$ 100 cada. O simulador não envia ordens reais. A taxa e o slippage são estimativas configuradas; a venda é uma posição SHORT sintética, sem alavancagem nem funding. O acompanhamento contínuo depende do cron ou de uma tela aberta.</div>
+<div class="notice">As <?= count($strategies) ?> contas começam com US$ 100 cada. O simulador não envia ordens reais. A taxa e o slippage são estimativas configuradas; a venda é uma posição SHORT sintética, sem alavancagem nem funding. Grid, DCA, rebalanceamento e TWAP são aproximações; a base não armazena funding nem preços spot e perpétuo separados. O acompanhamento depende do cron ou de uma tela aberta.</div>
 </main>
 </div>
 <script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
