@@ -6,11 +6,12 @@ require_once __DIR__ . '/trade_signal_state.php';
 const LIVE_INITIAL_BALANCE = 100.0;
 const LIVE_THRESHOLD = .1;
 const LIVE_HORIZON_MINUTES = 5;
+const LIVE_MEDIAN_HOLD_MINUTES = 15;
 // Kept for old ledgers and callers. Each simulated strategy has its own account.
 const LIVE_LANES = ['LONG_ONLY' => 'LONG', 'SHORT_ONLY' => 'SHORT'];
 const LIVE_STRATEGIES = [
     'adaptive' => ['name' => 'Super Previsão', 'description' => 'Modelo adaptativo com validação histórica após custos.'],
-    'median' => ['name' => 'Retorno à mediana', 'description' => 'Compra quando BTC normalizado fica abaixo da média branca dos dez indicadores do gráfico; vende quando fica acima.'],
+    'median' => ['name' => 'Tendência e recuo', 'description' => 'Compra recuos de preço em tendência de alta e abre venda em repiques durante uma tendência de baixa.'],
     'ema_trend' => ['name' => 'Tendência EMA', 'description' => 'Combina os dez sinais de tendência: cruzamentos, médias, inclinação e estrutura.'],
     'momentum' => ['name' => 'Momentum', 'description' => 'Combina RSI, MACD, Estocástico, ROC, CCI, Williams %R e PPO.'],
     'volume_flow' => ['name' => 'Volume e fluxo', 'description' => 'Usa volume relativo, OBV, MFI, VWAP, fluxo e confirmação de preço com volume.'],
@@ -216,24 +217,20 @@ function tsStrategySignal(string $strategyKey, array $history, int $index, array
     }
 
     if ($strategyKey === 'median') {
-        $median = tsIndicatorMedian($row);
         $price = (float)($row['btc'] ?? 0);
-        if ($median === null || $price <= 0) return ['label'=>1,'reason'=>'Aguardando linhas vÃ¡lidas do grÃ¡fico.'];
-        $minimum = $maximum = $price;
-        for ($i=$index; $i>=0; $i--) {
-            if ((int)$history[$i]['time'] < (int)$row['time']-86400) break;
-            $past = (float)$history[$i]['btc'];
-            $minimum = min($minimum,$past); $maximum = max($maximum,$past);
+        $trend = tsMeanFeatures($row, range(0,9));
+        $deviation = tsPriceDeviationPct($history, $index, 30);
+        if ($price <= 0 || $trend === null || $deviation === null) {
+            return ['label'=>1,'reason'=>'Aguardando histórico suficiente para confirmar tendência e recuo.'];
         }
-        if ($maximum-$minimum <= 0) return ['label'=>1,'reason'=>'HistÃ³rico de preÃ§o curto para normalizar o grÃ¡fico.'];
-        // The selected chart maps BTC to [-2, 2] over its trailing 24-hour range.
-        $btcLine = (($price-$minimum)/($maximum-$minimum))*4-2;
-        $gap = $median-$btcLine;
-        if ($gap >= .30) return ['label'=>2,'reason'=>'BTC abaixo da mÃ©dia branca dos indicadores.'];
-        if ($gap <= -.30) return ['label'=>0,'reason'=>'BTC acima da mÃ©dia branca dos indicadores.'];
-        return ['label'=>1,'reason'=>'BTC prÃ³ximo da mÃ©dia branca; sem afastamento suficiente.'];
+        if ($trend >= .20 && $deviation <= -.15) {
+            return ['label'=>2,'reason'=>'Tendência de alta confirmada; BTC em recuo abaixo da média curta.'];
+        }
+        if ($trend <= -.20 && $deviation >= .15) {
+            return ['label'=>0,'reason'=>'Tendência de baixa confirmada; BTC em repique acima da média curta.'];
+        }
+        return ['label'=>1,'reason'=>'Aguardando recuo em tendência de alta ou repique em tendência de baixa.'];
     }
-
     if ($strategyKey === 'ema_trend') return $direction(tsMeanFeatures($row,range(0,9)),.55,'TendÃªncia das EMAs');
     if ($strategyKey === 'momentum') return $direction(tsMeanFeatures($row,range(10,19)),.35,'Momentum dos osciladores');
     if ($strategyKey === 'volume_flow') return $direction(tsMeanFeatures($row,range(20,29)),.35,'Volume e fluxo');
@@ -338,12 +335,16 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
                 }
             }
         }
-        if ($reason===null && (($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2))) $reason='Sinal contrÃ¡rio';
+        if ($reason===null && (($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2))) {
+            $grossReturn=($price/$state['entry']-1)*100*($state['side']==='LONG'?1:-1);
+            if ($grossReturn >= $state['cost_pct'] + $policy['minEdgePct']) $reason='Sinal contrário após lucro líquido';
+        }
         if ($reason===null) return ['executed'=>false,'message'=>$strategyKey.': posiÃ§Ã£o monitorada.'];
         $grossReturn=($price/$state['entry']-1)*100;
         $netReturn=$grossReturn*($state['side']==='LONG'?1:-1)-$state['cost_pct'];
         $pnl=tsUnrealized($state,$price);$cash=max(0,$state['cash']+$pnl);
         $event=tsEvent($runId,$data,$state,$time);
+        $event['strategy_minutes']=$policy['minutes'];
         foreach (['entry_time','predicted_label','neighbors_count','similarity','probability_up','probability_flat','probability_down','model_version'] as $field) $event[$field]=$origin[$field];
         $event=array_replace($event,['event_type'=>'CLOSE_'.$state['side'],'side'=>$state['side'],
             'entry_price'=>$state['entry'],'btc_return_pct'=>$grossReturn,'trade_return_pct'=>$netReturn,
@@ -364,9 +365,10 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
     $side=$label===2?'LONG':'SHORT';$qty=$state['cash']*$allocation/$price;
     $cost=tradeRoundTripCost($policy);$estimatedCosts=$qty*$price*$cost/100;
     $event=tsEvent($runId,$data,$state,$time,$label);
+    $event['strategy_minutes']=$policy['minutes'];
     tsInsert($pdo,array_replace($event,['event_type'=>'OPEN_'.$side,'side'=>$side,'position_side'=>$side,
         'position_qty'=>$qty,'position_entry_price'=>$price,'cost_pct'=>$cost,
-        'equity_after'=>$state['cash']-$estimatedCosts,'unrealized_pnl_usd'=>-$estimatedCosts,
+        'fees_usd'=>$estimatedCosts,'equity_after'=>$state['cash']-$estimatedCosts,'unrealized_pnl_usd'=>-$estimatedCosts,
         'notes'=>($strategyKey==='twap'?'TWAP_SLICE=1; ':'').$signal['reason'].'; '.number_format($allocation*100,0,',','.').'% do saldo; custos provisionados.']));
     return ['executed'=>true,'message'=>$strategyKey.': abriu '.($side==='LONG'?'compra':'venda').'.'];
 }
@@ -388,7 +390,8 @@ function tsExecute(PDO $pdo, int $intervalSeconds = 60, ?array $data = null): ar
             $history=$data['history'];$index=count($history)-1;
             foreach (tsStrategies() as $key=>$strategy) {
                 $signal=tsStrategySignal($key,$history,$index,$data);
-                $results[]=tsExecuteStrategy($pdo,$runId,$key,$signal,$data,$time,$price,$intervalSeconds,$policy);
+                $strategyPolicy=$key==='median'?array_replace($policy,['minutes'=>LIVE_MEDIAN_HOLD_MINUTES]):$policy;
+                $results[]=tsExecuteStrategy($pdo,$runId,$key,$signal,$data,$time,$price,$intervalSeconds,$strategyPolicy);
             }
         } else {
             foreach (LIVE_LANES as $lane=>$side) $results[]=tsExecuteLane($pdo,$runId,$lane,$side,$data,$time,$price,$intervalSeconds,$policy);
@@ -449,9 +452,10 @@ function tsBacktestStrategy(string $strategyKey, array $data): array
         $signal=tsStrategySignal($strategyKey,$history,$index,$data,$adaptiveSignals);$label=(int)$signal['label'];
         if(!in_array($label,[0,2],true)){$skipped++;continue;}
         if((LIVE_STRATEGIES[$strategyKey]['market']??'futures')==='spot' && $label===0){$skipped++;continue;}
+        $exitPolicy=$strategyKey==='median'?array_replace(tradePolicy(),['minutes'=>LIVE_MEDIAN_HOLD_MINUTES]):tradePolicy();
         $outcome=$strategyKey==='twap'
             ? tsTwapReplayOutcome($history,$sample,$label,tradePolicy())
-            : tradeReplayOutcome($history,$sample,$label);
+            : tradeReplayOutcome($history,$sample,$label,$exitPolicy);
         if(!$outcome){$skipped++;continue;}
         $before=$balance;
         $allocation=(float)($outcome['allocation']??($strategyKey==='twap'?tradePolicy()['allocation']: (LIVE_STRATEGIES[$strategyKey]['allocation']??tradePolicy()['allocation'])));

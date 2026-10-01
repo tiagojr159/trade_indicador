@@ -7,7 +7,7 @@ function tradePolicy(): array
 {
     // Simulation assumptions, not an exchange fee quote. Percent values.
     return ['feePct' => .10, 'slippagePct' => .02, 'allocation' => .25,
-        'stopPct' => .35, 'takePct' => .70, 'minutes' => 5,
+        'stopPct' => .35, 'takePct' => .40, 'minutes' => 5,
         'minEvidence' => 12, 'minEffective' => 8, 'minEdgePct' => .03];
 }
 
@@ -71,7 +71,7 @@ function tradeExitReason(array $state, float $price, int $time, ?array $policy =
     if ($state['side'] === 'FLAT' || empty($state['entry'])) return null;
     $r = ($price/$state['entry']-1)*100*($state['side']==='LONG'?1:-1);
     if ($r <= -$p['stopPct']) return 'Limite de perda';
-    if ($r >= $p['takePct']) return 'Realização de lucro';
+    if ($r >= max($p['takePct'], tradeRoundTripCost($p) + ($p['minEdgePct'] ?? 0))) return 'Realização de lucro';
     if ($time >= $state['entry_ts'] + $p['minutes']*60) return 'Horizonte concluído';
     return null;
 }
@@ -79,17 +79,26 @@ function tradeExitReason(array $state, float $price, int $time, ?array $policy =
 function tradeReplayOutcome(array $rows, array $sample, int $label, ?array $policy = null): array
 {
     $p = $policy ?? tradePolicy();
-    $state = ['side' => $label === 2 ? 'LONG' : 'SHORT', 'entry' => $sample['btc'], 'entry_ts' => $sample['time']];
+    $entry = (float)$sample['btc'];
+    $state = ['side' => $label === 2 ? 'LONG' : 'SHORT', 'entry' => $entry, 'entry_ts' => $sample['time']];
+    $lastPrice = $entry;
+    $lastTime = (int)$sample['time'];
+    $endTime = max((int)$sample['end'], $lastTime + (int)$p['minutes'] * 60);
+    $reason = null;
     foreach ($rows as $row) {
         if ($row['time'] <= $sample['time']) continue;
-        if ($row['time'] > $sample['end']) break;
-        $reason = tradeExitReason($state, $row['btc'], $row['time'], $p);
-        if ($reason !== null) {
-            $r = ($row['btc']/$sample['btc']-1)*100;
-            return ['end' => $row['time'], 'return' => $r,
-                'net' => $r*($label===2?1:-1)-tradeRoundTripCost($p), 'reason' => $reason];
-        }
+        if ($row['time'] > $endTime) break;
+        $lastPrice = (float)$row['btc'];
+        $lastTime = (int)$row['time'];
+        $reason = tradeExitReason($state, $lastPrice, $lastTime, $p);
+        if ($reason !== null) break;
     }
-    return ['end' => $sample['end'], 'return' => $sample['return'],
-        'net' => $sample['return']*($label===2?1:-1)-tradeRoundTripCost($p), 'reason' => 'Horizonte concluído'];
+    if ($lastTime === (int)$sample['time']) {
+        $lastTime = (int)$sample['end'];
+        $lastPrice = $entry * (1 + (float)$sample['return'] / 100);
+    }
+    $r = ($lastPrice / $entry - 1) * 100;
+    return ['end' => $lastTime, 'return' => $r,
+        'net' => $r * ($label === 2 ? 1 : -1) - tradeRoundTripCost($p),
+        'reason' => $reason ?? 'Horizonte concluído'];
 }
