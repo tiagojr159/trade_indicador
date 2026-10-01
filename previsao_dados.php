@@ -3,11 +3,15 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/previsao_motor.php';
 
-function spData(int $minutes, float $threshold): array
+function spData(int $minutes, float $threshold, bool $includeHistory = false): array
 {
     static $memo = [];
     $key = $minutes . ':' . $threshold;
-    if (isset($memo[$key])) return $memo[$key];
+    if (isset($memo[$key])) {
+        $result = $memo[$key];
+        if (!$includeHistory) unset($result['history']);
+        return $result;
+    }
     $seedPath = __DIR__ . '/data/super_previsao_base.json';
     $seed = is_file($seedPath) ? json_decode((string)file_get_contents($seedPath), true) : [];
     $saved = is_array($seed) ? ($seed['rows'] ?? []) : [];
@@ -74,7 +78,7 @@ function spData(int $minutes, float $threshold): array
         }
         $variable += (int)(count($values) > 1);
     }
-    return $memo[$key] = ['minutes' => $minutes, 'threshold' => $threshold, 'generated' => time(),
+    $memo[$key] = ['minutes' => $minutes, 'threshold' => $threshold, 'generated' => time(),
         'modelVersion' => TRADE_MODEL_VERSION, 'decision' => $decision, 'evidence' => $evidence, 'policy' => tradePolicy(),
         'timezone' => date_default_timezone_get(), 'source' => $database === 'ok' ? 'Banco em tempo real' : 'Base SQL importada',
         'database' => $database, 'status' => $status, 'fresh' => $fresh,
@@ -82,5 +86,14 @@ function spData(int $minutes, float $threshold): array
         'hours' => $hours, 'variable' => $variable, 'first' => $rows ? $rows[0]['time'] : null,
         'latest' => $latest, 'prediction' => $prediction, 'metrics' => $metrics,
         'samples' => $analysis['samples'], 'tests' => $analysis['tests'],
+        // Keep the prepared causal rows available to the independent strategy accounts.
+        'history' => array_map(static fn(array $row): array => [
+            'time' => $row['time'], 'date' => $row['date'], 'btc' => $row['btc'],
+            'x' => $row['x'], 'context' => $row['context'] ?? [],
+            'interval' => $row['interval'], 'names' => $row['names'],
+        ], $rows),
         'chart' => $chart, 'chartEnd' => $chartEnd];
+    $result = $memo[$key];
+    if (!$includeHistory) unset($result['history']);
+    return $result;
 }

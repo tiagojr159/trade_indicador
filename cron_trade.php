@@ -69,8 +69,9 @@ try {
         }
         if ($collectionLock) fclose($collectionLock);
     } catch (Throwable $error) { $result['tasks']['coleta'] = ['ok'=>false,'error'=>$error->getMessage()]; }
-    $data = spData(LIVE_HORIZON_MINUTES,LIVE_THRESHOLD);
+    $data = spData(LIVE_HORIZON_MINUTES,LIVE_THRESHOLD,true);
     $result['tasks']['super_previsao'] = $data;
+    unset($result['tasks']['super_previsao']['history']);
     $result['tasks']['trade_simulado'] = tsExecute($pdo,60,$data);
 } catch (Throwable $error) {
     $result['ok']=false;

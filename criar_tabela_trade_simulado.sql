@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS trade_simulado (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     run_id VARCHAR(32) NOT NULL,
-    strategy_lane VARCHAR(16) NOT NULL DEFAULT 'LEGACY',
+    strategy_lane VARCHAR(32) NOT NULL DEFAULT 'LEGACY',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     strategy_minutes INT NOT NULL,
     threshold_pct DECIMAL(8, 4) NOT NULL,
