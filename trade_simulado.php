@@ -132,13 +132,10 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 <p class="section-note">O replay percorre os registros disponíveis em ordem e só usa indicadores e preços anteriores à entrada. Ele compara este conjunto de dados; não garante resultado futuro. Uma estratégia sem operações mantém os US$ 100 e não deve ser interpretada como vencedora.</p>
 </section>
 
-<section><div class="section-head"><div><h3>Evolução dos US$ 100 por estratégia</h3><small>Replay histórico comparado com manter US$ 100 em Bitcoin no mesmo período.</small></div><span class="badge"><?= count($charts) ?> gráficos</span></div>
-<div class="strategy-charts">
-<?php foreach ($charts as $key => $chart): ?>
-  <article class="strategy-chart"><h4><?= htmlspecialchars($chart['name'], ENT_QUOTES, 'UTF-8') ?></h4><div class="chart-legend"><span><i class="chart-dot" style="background:#3cdda5"></i>Saldo da estratégia</span><span><i class="chart-dot" style="background:#f7b928"></i>US$ 100 em Bitcoin</span></div><canvas id="chart-<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>" data-points="<?= htmlspecialchars(json_encode($chart['points'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8') ?>" aria-label="Evolução em dólares de <?= htmlspecialchars($chart['name'], ENT_QUOTES, 'UTF-8') ?> e do investimento em Bitcoin"></canvas><p class="chart-note">Ambas as linhas começam em US$ 100.</p></article>
-<?php endforeach; ?>
-</div>
-<?php if (!$charts): ?><p class="section-note">Ainda não há histórico de preço suficiente para desenhar os gráficos.</p><?php endif; ?>
+<section><div class="section-head"><div><h3>Evolução da estratégia: <?= htmlspecialchars($strategies[$selected]['name'], ENT_QUOTES, 'UTF-8') ?></h3><small>Saldo acumulado do replay comparado com manter US$ 100 em Bitcoin no mesmo período.</small></div><span class="badge">Capital inicial: <?= brMoney(LIVE_INITIAL_BALANCE) ?></span></div>
+<?php if (isset($charts[$selected])): $chart=$charts[$selected]; ?>
+<article class="strategy-chart"><div class="chart-legend"><span><i class="chart-dot" style="background:#3cdda5"></i>Saldo da estratégia</span><span><i class="chart-dot" style="background:#f7b928"></i>Valor de US$ 100 em Bitcoin</span></div><canvas id="chart-selected" data-points="<?= htmlspecialchars(json_encode($chart['points'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8') ?>" aria-label="Evolução em dólares da estratégia <?= htmlspecialchars($chart['name'], ENT_QUOTES, 'UTF-8') ?> e do investimento em Bitcoin"></canvas><p class="chart-note">A linha verde incorpora lucro e prejuízo acumulados de cada operação fechada no replay. Ambas as linhas começam em US$ 100.</p></article>
+<?php else: ?><p class="section-note">Ainda não há histórico de preço suficiente para desenhar o gráfico.</p><?php endif; ?>
 </section>
 
 <section><div class="section-head"><h3>Operações históricas desta estratégia</h3><span class="badge"><?= (int)$backtests[$selected]['trades'] ?> entradas</span></div><div class="table-scroll"><table><thead><tr><th>Entrada</th><th>Fechamento</th><th>Ordem</th><th>Variação BTC</th><th>Resultado líquido</th><th>Lucro/prejuízo</th><th>Saldo após</th><th>Motivo de saída</th></tr></thead><tbody>
@@ -172,15 +169,15 @@ function drawStrategyChart(canvas) {
   const pad = {left:48, right:10, top:12, bottom:25};
   const plotW = w-pad.left-pad.right, plotH = h-pad.top-pad.bottom;
   const values = points.flatMap(p => [Number(p.account), Number(p.bitcoin)]).filter(Number.isFinite);
-  const low = Math.min(0, ...values), high = Math.max(100, ...values);
-  const span = Math.max(1, high-low), x = i => pad.left + (points.length < 2 ? plotW/2 : i/(points.length-1)*plotW);
+  const low = Math.min(100, ...values), high = Math.max(100, ...values);
+  const span = Math.max(0.01, high-low), digits = span < 10 ? 2 : 0, x = i => pad.left + (points.length < 2 ? plotW/2 : i/(points.length-1)*plotW);
   const y = value => pad.top + (high-value)/span*plotH;
   ctx.font = '10px system-ui'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.fillStyle = '#a3afb4'; ctx.lineWidth = 1;
   for (let n=0;n<=3;n++) {
     const value = low + span*n/3, yy = y(value);
     ctx.beginPath(); ctx.moveTo(pad.left,yy); ctx.lineTo(w-pad.right,yy); ctx.stroke();
-    ctx.fillText('$'+value.toFixed(0),pad.left-6,yy);
+    ctx.fillText('$'+value.toFixed(digits),pad.left-6,yy);
   }
   for (const [field,color] of [['account','#3cdda5'],['bitcoin','#f7b928']]) {
     ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
@@ -197,7 +194,8 @@ function drawStrategyChart(canvas) {
   ctx.fillText(last.toLocaleDateString()+' '+last.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),w-pad.right,h-4);
 }
 function drawAllStrategyCharts() {
-  document.querySelectorAll('.strategy-chart canvas').forEach(drawStrategyChart);
+  const canvas = document.getElementById('chart-selected');
+  if (canvas) drawStrategyChart(canvas);
 }
 drawAllStrategyCharts();
 window.addEventListener('resize',drawAllStrategyCharts);
