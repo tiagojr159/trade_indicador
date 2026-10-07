@@ -12,6 +12,7 @@ const LIVE_LANES = ['LONG_ONLY' => 'LONG', 'SHORT_ONLY' => 'SHORT'];
 const LIVE_STRATEGIES = [
     'adaptive' => ['name' => 'Super Previsão', 'description' => 'Modelo adaptativo com validação histórica após custos.'],
     'median' => ['name' => 'Tendência e recuo', 'description' => 'Compra recuos de preço em tendência de alta e abre venda em repiques durante uma tendência de baixa.'],
+    'white_median' => ['name' => 'Linha branca (mediana)', 'description' => 'Compra quando o BTC normalizado fica abaixo da média dos dez indicadores do gráfico e vende quando fica acima. Opera somente por essa comparação.', 'market' => 'futures', 'allocation' => .25],
     'ema_trend' => ['name' => 'Tendência EMA', 'description' => 'Combina os dez sinais de tendência: cruzamentos, médias, inclinação e estrutura.'],
     'momentum' => ['name' => 'Momentum', 'description' => 'Combina RSI, MACD, Estocástico, ROC, CCI, Williams %R e PPO.'],
     'volume_flow' => ['name' => 'Volume e fluxo', 'description' => 'Usa volume relativo, OBV, MFI, VWAP, fluxo e confirmação de preço com volume.'],
@@ -165,6 +166,31 @@ function tsIndicatorMedian(array $row): ?float
     return tsMeanFeatures($row, [13,14,17,20,25,29,31,32,36,41]);
 }
 
+function tsWhiteLinePosition(array $history, int $index): ?int
+{
+    if (!isset($history[$index])) return null;
+    static $cache = [];
+    $cacheKey = count($history).':'.(int)($history[0]['time'] ?? 0).':'.(int)($history[count($history)-1]['time'] ?? 0);
+    if (!isset($cache[$cacheKey])) {
+        $positions = [];
+        foreach ($history as $i => $row) {
+            $median = tsIndicatorMedian($row);
+            $now = (int)($row['time'] ?? 0); $prices = [];
+            for ($j = $i; $j >= 0; $j--) {
+                if ($now - (int)($history[$j]['time'] ?? 0) > 86400) break;
+                $price = (float)($history[$j]['btc'] ?? 0);
+                if ($price > 0) $prices[] = $price;
+            }
+            if ($median === null || !$prices) { $positions[$i] = null; continue; }
+            $min = min($prices); $max = max($prices);
+            $normalized = (($max - $min) > 0.000001) ? (((float)$row['btc'] - $min) / ($max - $min)) * 4 - 2 : 0;
+            $positions[$i] = $normalized < $median ? 2 : ($normalized > $median ? 0 : 1);
+        }
+        $cache = [$cacheKey => $positions];
+    }
+    return $cache[$cacheKey][$index] ?? null;
+}
+
 function tsPriceReference(array $history, int $index, int $lookback = 30): ?float
 {
     if (!isset($history[$index])) return null;
@@ -230,6 +256,13 @@ function tsStrategySignal(string $strategyKey, array $history, int $index, array
             return ['label'=>0,'reason'=>'Tendência de baixa confirmada; BTC em repique acima da média curta.'];
         }
         return ['label'=>1,'reason'=>'Aguardando recuo em tendência de alta ou repique em tendência de baixa.'];
+    }
+    if ($strategyKey === 'white_median') {
+        $position = tsWhiteLinePosition($history, $index);
+        if ($position === null) return ['label'=>1,'reason'=>'Aguardando valores do BTC e da linha branca.'];
+        return ['label'=>$position,'reason'=>$position===2
+            ? 'BTC abaixo da linha branca; sinal de compra.'
+            : ($position===0 ? 'BTC acima da linha branca; sinal de venda.' : 'BTC sobre a linha branca; aguardando.')];
     }
     if ($strategyKey === 'ema_trend') return $direction(tsMeanFeatures($row,range(0,9)),.55,'TendÃªncia das EMAs');
     if ($strategyKey === 'momentum') return $direction(tsMeanFeatures($row,range(10,19)),.35,'Momentum dos osciladores');
@@ -314,7 +347,9 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
     $state=tsLastState($pdo,$runId,$strategyKey);$origin=$state['origin'];$label=(int)$signal['label'];
     if ($origin && $time<=strtotime($origin['exit_time'])) return ['executed'=>false,'message'=>$strategyKey.': aguardando nova coleta.'];
     if ($state['side']!=='FLAT') {
-        $reason=tradeExitReason($state,$price,$time,$policy);
+        $reason=$strategyKey==='white_median'
+            ? ((($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2)) ? 'BTC cruzou a linha branca' : null)
+            : tradeExitReason($state,$price,$time,$policy);
         if ($reason===null && $strategyKey==='twap') {
             $slices=tsTwapSliceCount($origin);
             $targetSide=$label===2?'LONG':($label===0?'SHORT':'FLAT');
@@ -335,7 +370,7 @@ function tsExecuteStrategy(PDO $pdo, string $runId, string $strategyKey, array $
                 }
             }
         }
-        if ($reason===null && (($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2))) {
+        if ($reason===null && $strategyKey!=='white_median' && (($state['side']==='LONG' && $label===0) || ($state['side']==='SHORT' && $label===2))) {
             $grossReturn=($price/$state['entry']-1)*100*($state['side']==='LONG'?1:-1);
             if ($grossReturn >= $state['cost_pct'] + $policy['minEdgePct']) $reason='Sinal contrário após lucro líquido';
         }
@@ -433,6 +468,26 @@ function tsTwapReplayOutcome(array $history, array $sample, int $label, ?array $
         'reason'=>$reason??'Horizonte TWAP concluido; parcelas avaliadas pelo preco medio.'];
 }
 
+function tsWhiteMedianReplayOutcome(array $history, array $sample, int $label, ?array $policy = null): ?array
+{
+    $side = $label === 2 ? 'LONG' : 'SHORT';
+    $end = null; $price = null; $reason = 'Fim dos dados disponíveis';
+    foreach ($history as $index => $row) {
+        if ((int)$row['time'] <= (int)$sample['time']) continue;
+        $position = tsWhiteLinePosition($history, $index);
+        if ($position === null) continue;
+        $end = (int)$row['time']; $price = (float)$row['btc'];
+        if (($side === 'LONG' && $position === 0) || ($side === 'SHORT' && $position === 2)) {
+            $reason = 'BTC cruzou a linha branca';
+            break;
+        }
+    }
+    if ($price === null) return null;
+    $gross = ($price / (float)$sample['btc'] - 1) * 100;
+    $directional = $gross * ($side === 'LONG' ? 1 : -1);
+    return ['end'=>$end, 'return'=>$gross, 'net'=>$directional-tradeRoundTripCost($policy), 'reason'=>$reason];
+}
+
 function tsBacktestStrategy(string $strategyKey, array $data): array
 {
     $history=$data['history']??[];$balance=LIVE_INITIAL_BALANCE;$orders=[];$wins=$losses=$skipped=0;$peak=$balance;$drawdown=0.0;$gain=$loss=0.0;
@@ -455,7 +510,9 @@ function tsBacktestStrategy(string $strategyKey, array $data): array
         $exitPolicy=$strategyKey==='median'?array_replace(tradePolicy(),['minutes'=>LIVE_MEDIAN_HOLD_MINUTES]):tradePolicy();
         $outcome=$strategyKey==='twap'
             ? tsTwapReplayOutcome($history,$sample,$label,tradePolicy())
-            : tradeReplayOutcome($history,$sample,$label,$exitPolicy);
+            : ($strategyKey==='white_median'
+                ? tsWhiteMedianReplayOutcome($history,$sample,$label,$exitPolicy)
+                : tradeReplayOutcome($history,$sample,$label,$exitPolicy));
         if(!$outcome){$skipped++;continue;}
         $before=$balance;
         $allocation=(float)($outcome['allocation']??($strategyKey==='twap'?tradePolicy()['allocation']: (LIVE_STRATEGIES[$strategyKey]['allocation']??tradePolicy()['allocation'])));
