@@ -44,6 +44,37 @@ $totalOpen = array_sum(array_column($accounts, 'unrealized'));
 $totalEquity = $totalCash + $totalOpen;
 $historicalRank = array_keys($strategies);
 usort($historicalRank, static fn(string $a, string $b): int => $backtests[$b]['balance'] <=> $backtests[$a]['balance']);
+$history = $data['history'] ?? [];
+$testRows = $data['tests'] ?? [];
+$chartStart = $testRows
+    ? min(array_map(static fn(array $test): int => (int)$test['time'], $testRows))
+    : ((int)($history[count($history)-1]['time'] ?? time()) - 12 * 3600);
+$chartRows = array_values(array_filter($history, static fn(array $row): bool => (int)$row['time'] >= $chartStart && (float)($row['btc'] ?? 0) > 0));
+$charts = [];
+if ($chartRows) {
+    $initialBtc = (float)$chartRows[0]['btc'];
+    foreach ($strategies as $key => $strategy) {
+        $orders = array_reverse($backtests[$key]['orders']);
+        $tradeIndex = 0;
+        $balance = LIVE_INITIAL_BALANCE;
+        $points = [];
+        foreach ($chartRows as $row) {
+            $time = (int)$row['time'];
+            while (isset($orders[$tradeIndex]) && (int)$orders[$tradeIndex]['end'] <= $time) {
+                $balance = (float)$orders[$tradeIndex]['balance_after'];
+                $tradeIndex++;
+            }
+            $points[] = ['time'=>$time, 'account'=>$balance,
+                'bitcoin'=>LIVE_INITIAL_BALANCE * (float)$row['btc'] / $initialBtc];
+        }
+        $stride = max(1, (int)ceil(count($points) / 160));
+        $sampled = [];
+        foreach ($points as $i => $point) {
+            if ($i % $stride === 0 || $i === count($points)-1) $sampled[] = $point;
+        }
+        $charts[$key] = ['name'=>$strategy['name'], 'points'=>$sampled];
+    }
+}
 $signal = $selectedAccount['signal'];
 $statusMessage = $message ?: $signal['reason'];
 header('Cache-Control: no-store');
@@ -57,6 +88,7 @@ header('Cache-Control: no-store');
 <style>
 :root{color-scheme:dark;--bg:#111416;--panel:#191e21;--line:#30373b;--text:#f0f3f4;--muted:#a3afb4;--accent:#f7b928;--up:#3cdda5;--down:#ff7182;--flat:#bdc6cc}*{box-sizing:border-box;letter-spacing:0}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Arial,sans-serif}.wrap{max-width:1480px;margin:auto;padding:26px 28px}.topbar,.brand,nav,.section-head{display:flex;align-items:center}.topbar{justify-content:space-between;gap:22px;margin-bottom:28px}.brand{gap:12px}.coin{width:42px;height:42px;border-radius:8px;background:var(--accent);color:#151515;display:grid;place-items:center;font-size:26px;font-weight:900;text-decoration:none}h1{font-size:21px;line-height:1.2;margin:0 0 3px}small{color:var(--muted)}nav{flex-wrap:wrap;gap:5px}nav a{font-size:12px;text-decoration:none;color:var(--muted);padding:8px 10px;border-radius:6px}nav a[aria-current]{background:var(--accent);color:#151515;font-weight:750}.hero{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center}.hero h2{font-size:26px;margin:0 0 8px}.hero p{margin:0;color:var(--muted);max-width:900px}.button{border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text);padding:10px 14px;cursor:pointer}.button.primary{background:var(--accent);color:#151515;border-color:transparent;font-weight:800}.notice{border-left:3px solid var(--accent);background:#282313;padding:12px;margin:16px 0;color:#ffe6a7}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.card{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:15px;min-width:0}.card span{display:block;color:var(--muted);font-size:12px}.card b{display:block;font-size:23px;margin-top:5px;overflow-wrap:anywhere}.up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--flat)}.tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px;border-bottom:1px solid var(--line)}.tab{flex:0 0 auto;min-width:150px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);text-decoration:none}.tab strong,.tab small{display:block}.tab strong{font-size:13px;color:var(--text)}.tab[aria-selected="true"]{border-color:var(--accent);background:#282313}.tab[aria-selected="true"] strong{color:var(--accent)}.section-head{justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-top:28px}h3{margin:0;font-size:17px}.badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--muted);font-size:12px}.table-scroll{overflow:auto;max-height:560px}table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}th{text-align:left;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--bg)}td,th{padding:10px;border-bottom:1px solid #292f33}td:last-child,th:last-child{text-align:right}.description{color:var(--muted);margin:12px 0 0}.section-note{color:var(--muted);font-size:12px;margin:10px 0}.rank{color:var(--accent);font-weight:800}.positive{color:var(--up)}.negative{color:var(--down)}@media(max-width:900px){.wrap{padding:18px 14px}.topbar{align-items:flex-start;flex-direction:column}.hero{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}}@media(max-width:520px){.cards{grid-template-columns:1fr}.hero h2{font-size:23px}}
 nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);font-weight:800;padding:9px 12px}nav a:hover{color:var(--text);background:#2b3235}nav a[aria-current]{border-color:transparent;font-weight:850}
+.strategy-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.strategy-chart{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:14px;min-width:0}.strategy-chart h4{margin:0 0 6px;font-size:14px}.strategy-chart canvas{width:100%;height:190px;display:block}.chart-legend{display:flex;gap:16px;color:var(--muted);font-size:11px}.chart-legend span{display:flex;align-items:center;gap:6px}.chart-dot{width:9px;height:3px;border-radius:2px;display:inline-block}.chart-note{font-size:11px;color:var(--muted);margin:6px 0 0}@media(max-width:900px){.strategy-charts{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -100,6 +132,15 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 <p class="section-note">O replay percorre os registros disponíveis em ordem e só usa indicadores e preços anteriores à entrada. Ele compara este conjunto de dados; não garante resultado futuro. Uma estratégia sem operações mantém os US$ 100 e não deve ser interpretada como vencedora.</p>
 </section>
 
+<section><div class="section-head"><div><h3>Evolução dos US$ 100 por estratégia</h3><small>Replay histórico comparado com manter US$ 100 em Bitcoin no mesmo período.</small></div><span class="badge"><?= count($charts) ?> gráficos</span></div>
+<div class="strategy-charts">
+<?php foreach ($charts as $key => $chart): ?>
+  <article class="strategy-chart"><h4><?= htmlspecialchars($chart['name'], ENT_QUOTES, 'UTF-8') ?></h4><div class="chart-legend"><span><i class="chart-dot" style="background:#3cdda5"></i>Saldo da estratégia</span><span><i class="chart-dot" style="background:#f7b928"></i>US$ 100 em Bitcoin</span></div><canvas id="chart-<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>" data-points="<?= htmlspecialchars(json_encode($chart['points'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8') ?>" aria-label="Evolução em dólares de <?= htmlspecialchars($chart['name'], ENT_QUOTES, 'UTF-8') ?> e do investimento em Bitcoin"></canvas><p class="chart-note">Ambas as linhas começam em US$ 100.</p></article>
+<?php endforeach; ?>
+</div>
+<?php if (!$charts): ?><p class="section-note">Ainda não há histórico de preço suficiente para desenhar os gráficos.</p><?php endif; ?>
+</section>
+
 <section><div class="section-head"><h3>Operações históricas desta estratégia</h3><span class="badge"><?= (int)$backtests[$selected]['trades'] ?> entradas</span></div><div class="table-scroll"><table><thead><tr><th>Entrada</th><th>Fechamento</th><th>Ordem</th><th>Variação BTC</th><th>Resultado líquido</th><th>Lucro/prejuízo</th><th>Saldo após</th><th>Motivo de saída</th></tr></thead><tbody>
 <?php foreach (array_slice($backtests[$selected]['orders'],0,80) as $row): ?>
 <tr><td><?= brDateTime((int)$row['time']) ?></td><td><?= brDateTime((int)$row['end']) ?></td><td class="<?= $row['side']==='Compra'?'up':'down' ?>"><?= $row['side'] ?></td><td><?= brPct((float)$row['btc_return']) ?></td><td class="<?= $row['trade_return']>=0?'up':'down' ?>"><?= brPct((float)$row['trade_return']) ?></td><td class="<?= $row['pnl']>=0?'up':'down' ?>"><?= brMoney((float)$row['pnl']) ?></td><td><?= brMoney((float)$row['balance_after']) ?></td><td><?= htmlspecialchars((string)$row['reason'], ENT_QUOTES, 'UTF-8') ?></td></tr>
@@ -117,6 +158,50 @@ nav{gap:8px}nav a{border:1px solid var(--line);border-radius:12px;background:rgb
 </main>
 </div>
 <script src="cron_trade.js?v=<?= filemtime(__DIR__ . '/cron_trade.js') ?>" defer></script>
+<script>
+function drawStrategyChart(canvas) {
+  const points = JSON.parse(canvas.dataset.points || '[]');
+  if (!points.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width * scale));
+  canvas.height = Math.max(1, Math.round(rect.height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const w = rect.width, h = rect.height;
+  const pad = {left:48, right:10, top:12, bottom:25};
+  const plotW = w-pad.left-pad.right, plotH = h-pad.top-pad.bottom;
+  const values = points.flatMap(p => [Number(p.account), Number(p.bitcoin)]).filter(Number.isFinite);
+  const low = Math.min(0, ...values), high = Math.max(100, ...values);
+  const span = Math.max(1, high-low), x = i => pad.left + (points.length < 2 ? plotW/2 : i/(points.length-1)*plotW);
+  const y = value => pad.top + (high-value)/span*plotH;
+  ctx.font = '10px system-ui'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.fillStyle = '#a3afb4'; ctx.lineWidth = 1;
+  for (let n=0;n<=3;n++) {
+    const value = low + span*n/3, yy = y(value);
+    ctx.beginPath(); ctx.moveTo(pad.left,yy); ctx.lineTo(w-pad.right,yy); ctx.stroke();
+    ctx.fillText('$'+value.toFixed(0),pad.left-6,yy);
+  }
+  for (const [field,color] of [['account','#3cdda5'],['bitcoin','#f7b928']]) {
+    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+    points.forEach((point,i) => {
+      const xx=x(i), yy=y(Number(point[field]));
+      if (i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    });
+    ctx.stroke();
+  }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#a3afb4';
+  const first = new Date(Number(points[0].time)*1000), last = new Date(Number(points[points.length-1].time)*1000);
+  ctx.fillText(first.toLocaleDateString()+' '+first.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),pad.left,h-4);
+  ctx.textAlign='right';
+  ctx.fillText(last.toLocaleDateString()+' '+last.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),w-pad.right,h-4);
+}
+function drawAllStrategyCharts() {
+  document.querySelectorAll('.strategy-chart canvas').forEach(drawStrategyChart);
+}
+drawAllStrategyCharts();
+window.addEventListener('resize',drawAllStrategyCharts);
+</script>
 <script>window.addEventListener('cron-trade:done',()=>location.reload());</script>
 </body>
 </html>
